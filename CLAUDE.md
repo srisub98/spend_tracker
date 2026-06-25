@@ -65,6 +65,13 @@ PYTHON=.venv/bin/python npx playwright test       # browser e2e (boots its own s
   demo accounts, so e2e never touches real data. Locally pass `PYTHON=.venv/bin/python`.
 - **Mock data** lives in `tests/fixtures/` (one CSV per parser path + a Schwab holdings
   export) — synthetic and safe to commit. See its README for what each file exercises.
+- **Demo dataset** (`scripts/seed_test_db.py seed_demo_data()`, run via `--demo`) layers a
+  richer synthetic dataset — sheet history, live transactions, net-worth snapshots +
+  holdings, and bill splits — on top of the demo accounts so the dashboard, net-worth,
+  splits, and Excel/HTML exporters render real content. It's kept out of `seed_accounts()`
+  so the hermetic suite stays green; report tests opt in via the `demo_app`/`demo_client`
+  pytest fixtures, and the Playwright webServer seeds it automatically. Covered by
+  `tests/python/test_exports.py` and `tests/e2e/reports.spec.ts`.
 - **CI** (`.github/workflows/ci.yml`) runs pytest and Playwright on push/PR.
 - **Uploads are partitioned by provider** via `services/storage.py` (`upload_path()`):
   transaction CSVs land in `data/uploads/<provider-slug>/` (slug from the account's

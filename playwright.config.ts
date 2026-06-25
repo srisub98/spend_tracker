@@ -22,7 +22,7 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: `rm -f ${DB} && ${PY} scripts/seed_test_db.py && ${PY} app.py`,
+    command: `rm -f ${DB} && ${PY} scripts/seed_test_db.py --demo && ${PY} app.py`,
     url: `http://127.0.0.1:${PORT}/dashboard`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
@@ -31,6 +31,9 @@ export default defineConfig({
       PORT: String(PORT),
       FLASK_DEBUG: '0',
       ANTHROPIC_API_KEY: '',
+      // Write generated reports under data/ (git-ignored) so e2e never litters
+      // the real exports folder.
+      OUTPUT_FOLDER: 'data/e2e_exports',
     },
   },
 });
