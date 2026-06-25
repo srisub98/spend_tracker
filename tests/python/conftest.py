@@ -42,3 +42,20 @@ def flask_app(tmp_path, monkeypatch):
 @pytest.fixture()
 def client(flask_app):
     return flask_app.test_client()
+
+
+@pytest.fixture()
+def demo_app(flask_app):
+    """flask_app with the full synthetic demo dataset layered on (sheet history,
+    live transactions, net-worth snapshots + holdings, bill-split outings). Use
+    for report/export tests that need populated pages; keep the plain `flask_app`
+    fixture for hermetic tests that assume empty tables."""
+    from scripts.seed_test_db import seed_demo_data
+
+    seed_demo_data()
+    return flask_app
+
+
+@pytest.fixture()
+def demo_client(demo_app):
+    return demo_app.test_client()
