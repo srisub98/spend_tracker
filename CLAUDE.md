@@ -222,21 +222,22 @@ Brokerage positions attached to a net-worth snapshot (filled by holdings CSV imp
 PRD Phase 4): `snapshot_id`, `account_id`, `symbol`, `quantity`, `price`, `market_value`.
 
 ### `transactions`
-One row per transaction imported from CSV.
+One row per transaction, imported from CSV or synced via Plaid.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | INTEGER PK | |
 | account_id | INTEGER FK | → accounts |
 | date | TEXT | YYYY-MM-DD |
-| description | TEXT | raw payee/memo from CSV |
+| description | TEXT | raw payee/memo from CSV, or Plaid's merchant name |
 | amount | REAL | positive = money in, negative = money out |
 | currency | TEXT | default USD |
 | category | TEXT | assigned by rules, Claude, or user |
 | category_source | TEXT | 'rule' / 'claude' / 'user' / NULL |
 | notes | TEXT | user-added notes |
-| raw_csv_row | TEXT | JSON of original CSV row (audit trail) |
+| raw_csv_row | TEXT | JSON of original CSV row (audit trail) — NULL for pure-Plaid rows |
 | import_batch_id | TEXT | UUID per upload session |
+| plaid_transaction_id | TEXT | Plaid's stable id — set on Plaid-origin rows, or adopted onto a matching CSV row by `insert_plaid_rows()` (see `accounts` note above) |
 | created_at | TEXT | ISO8601 |
 
 **UNIQUE constraint:** `(account_id, date, description, amount)` — re-uploading the same CSV is safe.
@@ -416,3 +417,6 @@ Category source is set to `'claude'`.
 - **pandas only in services** — not imported in models or routes; keeps mental model clean
 - **Single `python3 app.py` command** — no migration step; categories/rules seed automatically on first init
 - **No auth** — local only, localhost, single user
+- **Plaid sync mirrors the Schwab integration pattern** — a single `configured()` predicate
+  gates both the routes (404 if unset) and the template UI, so an external API integration
+  is always strictly additive: unset env vars reproduce yesterday's app exactly

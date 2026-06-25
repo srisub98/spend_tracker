@@ -71,7 +71,15 @@ def test_cross_source_dedup_against_csv(flask_app):
             "SELECT plaid_transaction_id, description FROM transactions").fetchone()
         assert adopted["plaid_transaction_id"] == "px"
         assert adopted["description"] == "STARBUCKS #1234 SEATTLE WA"  # CSV row kept
+
+        # A later sync re-sends the same Plaid txn (id now matches directly) — must
+        # NOT clobber the CSV's raw description/date with Plaid's cleaned version.
         assert tx_model.insert_plaid_rows([plaid_row])["updated"] == 1
+        kept = get_db().execute(
+            "SELECT description, date FROM transactions WHERE plaid_transaction_id='px'"
+        ).fetchone()
+        assert kept["description"] == "STARBUCKS #1234 SEATTLE WA"
+        assert kept["date"] == "2026-06-10"
 
 
 def test_remove_deletes_plaid_origin_but_keeps_csv(flask_app):

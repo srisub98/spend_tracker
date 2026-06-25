@@ -57,7 +57,8 @@ Create your accounts, then upload statements at **Transactions → Upload**.
   occupies 5000.
 - `LIVE_START_MONTH`, `SCHWAB_*`, `PLAID_*` — see comments in `.env.example` (only needed
   for the optional history-bootstrap, Schwab-sync, and Plaid bank-sync features). Plaid
-  Sandbox is free with fake data; leave `PLAID_*` blank to stay CSV-only.
+  Sandbox is free with fake data, and real banks are free too under Plaid's no-cost
+  Trial plan (up to 10 linked banks); leave `PLAID_*` blank to stay CSV-only.
 
 ## Bring your own statements
 

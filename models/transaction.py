@@ -81,6 +81,9 @@ def insert_plaid_rows(rows, date_tolerance_days=3):
     Three-layer dedup (see plan Hard Requirement 2):
       1. Same plaid_transaction_id already stored → UPDATE in place (handles Plaid
          'modified' events like pending→posted) and keep any category already set.
+         If the row originated from a CSV import (it merely *adopted* this id via
+         layer 2 on an earlier sync), its date/description/amount are the real raw
+         memo/audit-trail — never overwritten, only pure-Plaid-origin rows refresh.
       2. A non-Plaid row (e.g. a CSV import) for the same purchase already exists —
          matched on account + amount + a small date window, IGNORING description
          (Plaid's "Starbucks" never byte-matches a raw "STARBUCKS #1234" memo). Adopt
@@ -97,13 +100,14 @@ def insert_plaid_rows(rows, date_tolerance_days=3):
         amount = round(row["amount"], 2)
 
         existing = db.execute(
-            "SELECT id FROM transactions WHERE plaid_transaction_id=?", (ptid,)
+            "SELECT id, raw_csv_row FROM transactions WHERE plaid_transaction_id=?", (ptid,)
         ).fetchone()
         if existing:
-            db.execute(
-                "UPDATE transactions SET date=?, description=?, amount=? WHERE id=?",
-                (row["date"], row["description"], amount, existing["id"]),
-            )
+            if existing["raw_csv_row"] is None:
+                db.execute(
+                    "UPDATE transactions SET date=?, description=?, amount=? WHERE id=?",
+                    (row["date"], row["description"], amount, existing["id"]),
+                )
             updated += 1
             continue
 

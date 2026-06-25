@@ -37,14 +37,18 @@ def exchange():
     public_token = (request.get_json(silent=True) or {}).get("public_token") \
         if request.is_json else request.form.get("public_token")
     if not public_token:
-        return (jsonify(error="missing public_token"), 400) if request.is_json \
-            else (flash("Link did not return a token.", "error") or redirect(url_for("accounts.index")))
+        if request.is_json:
+            return jsonify(error="missing public_token"), 400
+        flash("Link did not return a token.", "error")
+        return redirect(url_for("accounts.index"))
     try:
         plaid_api.exchange_public_token(public_token)
     except Exception as e:
         msg = f"Could not link bank: {e.__class__.__name__}: {e}"
-        return (jsonify(error=msg), 500) if request.is_json else \
-            (flash(msg, "error") or redirect(url_for("accounts.index")))
+        if request.is_json:
+            return jsonify(error=msg), 500
+        flash(msg, "error")
+        return redirect(url_for("accounts.index"))
     if request.is_json:
         return jsonify(ok=True)
     flash("Bank linked — hit Sync to pull transactions.")
@@ -73,7 +77,7 @@ def sync():
     acct_by_plaid = {a["plaid_account_id"]: a["id"]
                      for a in account_model.get_all() if a["plaid_account_id"]}
 
-    inserted = updated = skipped = removed = 0
+    inserted = updated = skipped = removed = unmapped = 0
     new_ptids, errors = [], []
     for item in items:
         try:
@@ -87,7 +91,8 @@ def sync():
         for txn in added + modified:
             acct_id = acct_by_plaid.get(txn["account_id"])
             if not acct_id:
-                continue  # a Plaid account with no local mapping — skip safely
+                unmapped += 1  # a Plaid account with no local mapping — skip safely
+                continue
             row = plaid_api.map_transaction(txn, acct_id)
             cat = apply_rules(row["description"], rules)
             row["category"] = cat
@@ -111,7 +116,8 @@ def sync():
     flash(f"Plaid sync: {inserted} new, {updated} updated, "
           f"{skipped} matched existing (no duplicates), "
           f"{len(pairs)} categorized by Claude"
-          + (f", {removed} removed" if removed else "") + ".")
+          + (f", {removed} removed" if removed else "")
+          + (f", {unmapped} skipped (no local account)" if unmapped else "") + ".")
     return redirect(url_for("accounts.index"))
 
 

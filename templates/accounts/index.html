@@ -26,8 +26,10 @@
     {% endif %}
   </div>
   {% for it in plaid_items %}
+    {% set bwords = it.institution.split() if it.institution else [] %}
+    {% set binitials = ((bwords[0][:1] ~ (bwords[1][:1] if bwords | length > 1 else bwords[0][1:2])) | upper) if bwords else 'PL' %}
     <div class="list-row">
-      <div class="list-ic">⛁</div>
+      <div class="list-ic">{{ binitials }}</div>
       <div class="list-main">
         <div class="list-name">{{ it.institution }}</div>
         <div class="list-sub">
