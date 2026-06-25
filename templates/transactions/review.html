@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Review Categories{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Review Categories</h1>
+  <span class="meta">{{ transactions | length }} to review</span>
+</div>
+
+{% if not transactions %}
+  <p class="empty">All transactions are categorized. ✓</p>
+{% else %}
+<table class="data-table">
+  <thead>
+    <tr><th>Date</th><th>Account</th><th>Description</th><th>Amount</th><th>Category</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for t in transactions %}
+    <tr id="row-{{ t.id }}">
+      <td class="mono">{{ t.date }}</td>
+      <td>{{ t.account_name }}</td>
+      <td class="desc">{{ t.description }}</td>
+      <td class="mono {% if t.amount >= 0 %}positive{% else %}negative{% endif %}">
+        {{ "${:,.2f}".format(t.amount) }}
+      </td>
+      <td>
+        <select class="category-select" data-id="{{ t.id }}">
+          <option value="">— uncategorized —</option>
+          {% for c in categories %}
+            <option value="{{ c }}" {% if t.category == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      <td>
+        <a class="btn btn-ghost" title="Create a rule from this transaction"
+           href="{{ url_for('rules.index', pattern=t.description, category=t.category or '') }}">+ Rule</a>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.category-select').forEach(sel => {
+  sel.addEventListener('change', async function() {
+    const id  = this.dataset.id;
+    const cat = this.value;
+    const res = await fetch(`/transactions/${id}/category`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({category: cat}),
+    });
+    if (res.ok) {
+      const row = document.getElementById(`row-${id}`);
+      row.style.opacity = '0.4';
+    }
+  });
+});
+</script>
+{% endblock %}
+{% endblock %}

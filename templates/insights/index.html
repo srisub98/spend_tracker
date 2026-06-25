@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Insights{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Insights</h1>
+  <span class="sub">trends measured against your own history</span>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Avg Spend / mo (12-mo)</div>
+    <div class="stat-value">${{ "{:,.0f}".format(avg_spend) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Declared Needed (Life)</div>
+    <div class="stat-value">${{ "{:,.0f}".format(needed) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Discretionary / mo</div>
+    <div class="stat-value">${{ "{:,.0f}".format(discretionary) }}</div>
+  </div>
+</div>
+
+{% if cuts %}
+<div class="card" style="margin-bottom:16px;">
+  <h2>Save More — biggest levers</h2>
+  <table class="data-table">
+    <thead><tr><th>What</th><th>Why</th><th class="num">≈ Annual</th></tr></thead>
+    <tbody>
+    {% for c in cuts %}
+      <tr><td class="desc">{{ c.what }}</td><td class="dim">{{ c.why }}</td>
+          <td class="num mono">{{ "{:,.0f}".format(c.annual) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <small class="dim">Numbers, not vibes: subscriptions are annualized from detected charges;
+  category levers are (last full month − your 12-month average) × 12.</small>
+</div>
+{% endif %}
+
+<div class="card table-scroll" style="margin-bottom:16px;">
+  <h2>Category Trends <small class="dim">— {{ last_full }} vs your averages</small></h2>
+  <table class="data-table">
+    <thead><tr><th>Category</th><th class="num">{{ last_full }}</th>
+      <th class="num">3-mo avg</th><th class="num">12-mo avg</th>
+      <th class="num">vs 12-mo</th><th class="num">same mo last yr</th></tr></thead>
+    <tbody>
+    {% for t in trends %}
+      <tr>
+        <td>{{ t.category }}</td>
+        <td class="num mono">{{ "{:,.0f}".format(t.current) }}</td>
+        <td class="num mono dim">{{ "{:,.0f}".format(t.avg3) }}</td>
+        <td class="num mono dim">{{ "{:,.0f}".format(t.avg12) }}</td>
+        <td class="num mono {% if t.delta12 > 0 %}negative{% else %}positive{% endif %}">
+          {{ "{:+,.0f}".format(t.delta12) }}</td>
+        <td class="num mono dim">{{ "{:,.0f}".format(t.yoy) if t.yoy is not none else '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="two-col">
+  <div class="card table-scroll">
+    <h2>Top Merchants (12 mo, your share)</h2>
+    <table class="data-table">
+      <thead><tr><th>Merchant</th><th>Category</th><th class="num">Spent</th><th class="num">Visits</th></tr></thead>
+      <tbody>
+      {% for m in by_spend %}
+        <tr><td class="desc">{{ m.merchant }}</td><td class="dim">{{ m.category or '—' }}</td>
+            <td class="num mono">{{ "{:,.0f}".format(m.spent) }}</td>
+            <td class="num mono">{{ m.visits }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card table-scroll">
+    <h2>Most Frequent</h2>
+    <table class="data-table">
+      <thead><tr><th>Merchant</th><th class="num">Visits</th><th class="num">Spent</th></tr></thead>
+      <tbody>
+      {% for m in by_visits %}
+        <tr><td class="desc">{{ m.merchant }}</td>
+            <td class="num mono">{{ m.visits }}</td>
+            <td class="num mono">{{ "{:,.0f}".format(m.spent) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card table-scroll" style="margin:16px 0;">
+  <h2>Subscription Audit <small class="dim">— detected from charge cadence</small></h2>
+  <table class="data-table">
+    <thead><tr><th>Merchant</th><th>Category</th><th class="num">/ mo</th>
+      <th class="num">/ yr</th><th>Flags</th></tr></thead>
+    <tbody>
+    {% for s in subs %}
+      <tr>
+        <td class="desc">{{ s.merchant }}</td>
+        <td class="dim">{{ s.category or '—' }}</td>
+        <td class="num mono">{{ "{:,.2f}".format(s.avg_amount) }}</td>
+        <td class="num mono">{{ "{:,.0f}".format(s.annual) }}</td>
+        <td>
+          {% if s.creep %}<span class="badge badge-owed" title="last charge above average">price ↑</span>{% endif %}
+          {% if s.stale %}<span class="badge" title="no charge in 45+ days">stale — cancelled?</span>{% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="empty">Nothing detected yet — needs ≥3 monthly charges.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Budgets — {{ month_name }} so far</h2>
+  <form method="post" action="{{ url_for('insights.save_budgets') }}">
+    <table class="data-table">
+      <thead><tr><th>Category</th><th class="num">Spent</th><th class="num">Budget</th>
+        <th style="width:40%"></th></tr></thead>
+      <tbody>
+      {% for b in budget_rows %}
+        {% set frac = (b.spent / b.budget) if b.budget else 0 %}
+        <tr>
+          <td>{{ b.category }}</td>
+          <td class="num mono {% if frac > 1 %}negative{% endif %}">{{ "{:,.0f}".format(b.spent) }}</td>
+          <td class="num"><input type="number" step="1" name="budget_{{ b.category }}"
+              value="{{ '%.0f' % b.budget }}" style="width:90px"></td>
+          <td>
+            <div class="progress-track" style="height:14px;">
+              <div class="progress-fill" style="width: {{ '%.0f' % (100 * (frac if frac < 1 else 1)) }}%;
+                   background: {% if frac > 1 %}var(--neg){% elif frac > 0.8 %}var(--amber){% else %}var(--pos){% endif %};"></div>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <button class="btn btn-primary" style="margin-top:10px;">Save budgets</button>
+    <small class="dim">Seeded from last year's monthly averages — edit freely; clear a value to remove.</small>
+  </form>
+</div>
+{% endblock %}

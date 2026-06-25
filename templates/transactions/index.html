@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Transactions — Finance{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Transactions</h1>
+  <span class="spacer"></span>
+  <a href="{{ url_for('transactions.upload') }}" class="btn">↑ Upload CSV</a>
+</div>
+
+<div class="segmented reveal" style="margin-bottom:14px;">
+  <a href="?status=&account_id={{ filters.account_id or '' }}&category={{ filters.category or '' }}&start_date={{ filters.start_date or '' }}&end_date={{ filters.end_date or '' }}"
+     class="{{ 'is-active' if not filters.status }}">All</a>
+  <a href="?status=review&account_id={{ filters.account_id or '' }}&category={{ filters.category or '' }}&start_date={{ filters.start_date or '' }}&end_date={{ filters.end_date or '' }}"
+     class="{{ 'is-active' if filters.status == 'review' }}">Needs Review{% if review_count %} ({{ review_count }}){% endif %}</a>
+</div>
+
+<form class="filter-bar reveal" method="get">
+  <input type="hidden" name="status" value="{{ filters.status or '' }}">
+  <select name="account_id">
+    <option value="">All Accounts</option>
+    {% for a in accounts %}
+      <option value="{{ a.id }}" {% if filters.account_id == a.id|string %}selected{% endif %}>{{ a.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="category">
+    <option value="">All Categories</option>
+    {% for c in categories %}
+      <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+    {% endfor %}
+  </select>
+  <input type="date" name="start_date" value="{{ filters.start_date or '' }}" aria-label="From">
+  <input type="date" name="end_date"   value="{{ filters.end_date or '' }}"   aria-label="To">
+  <button type="submit" class="btn">Filter</button>
+  <a href="{{ url_for('transactions.index') }}" class="btn btn-ghost">Clear</a>
+</form>
+
+{% set suggest_pattern = request.args.get('suggest_pattern') %}
+{% if suggest_pattern %}
+<div class="card reveal" style="margin-bottom:14px; border-color: var(--ink);">
+  <strong>Rule suggestion:</strong> several of those share
+  <code class="mono">"{{ suggest_pattern }}"</code> →
+  <span class="badge">{{ request.args.get('suggest_category') }}</span>.
+  <a class="btn btn-sm btn-primary"
+     href="{{ url_for('rules.index', pattern=suggest_pattern, category=request.args.get('suggest_category')) }}">
+    Create rule from this →</a>
+  <span class="dim">future imports of this merchant will auto-categorize.</span>
+</div>
+{% endif %}
+
+<p class="meta"><strong data-count="{{ total }}">{{ total }}</strong> transactions</p>
+
+<form method="post" action="{{ url_for('transactions.bulk_category') }}" id="bulk-form">
+  <input type="hidden" name="page" value="{{ page }}">
+  <input type="hidden" name="status" value="{{ filters.status or '' }}">
+  <input type="hidden" name="account_id" value="{{ filters.account_id or '' }}">
+  <input type="hidden" name="filter_category" value="{{ filters.category or '' }}">
+  <input type="hidden" name="start_date" value="{{ filters.start_date or '' }}">
+  <input type="hidden" name="end_date" value="{{ filters.end_date or '' }}">
+
+  <div class="filter-bar reveal" id="bulk-bar" style="display:none; margin-bottom:10px;">
+    <span class="meta" id="bulk-count">0 selected</span>
+    <select name="category" required>
+      <option value="">Set category to…</option>
+      {% for c in categories %}
+        <option value="{{ c }}">{{ c }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary">Apply to selected</button>
+    <small class="dim">Mass-categorizing also suggests a rule for the matching merchant.</small>
+  </div>
+</form>
+
+<div class="table-wrap reveal">
+<table class="data-table">
+  <thead>
+    <tr>
+      <th><input type="checkbox" id="check-all"></th>
+      <th>Date</th><th>Account</th><th>Description</th>
+      <th class="num">Amount</th><th>Category</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for t in transactions %}
+    <tr>
+      <td><input type="checkbox" name="ids" value="{{ t.id }}" class="row-check"></td>
+      <td class="mono dim">{{ t.date }}</td>
+      <td>{{ t.account_name }}</td>
+      <td class="desc">{{ t.description }}</td>
+      <td class="num mono {% if t.amount >= 0 %}positive{% else %}negative{% endif %}">
+        {{ '+' if t.amount >= 0 else '−' }}${{ "{:,.2f}".format(t.amount | abs) }}
+        {% if t.my_share is not none %}
+          <br><small class="dim" title="split — only your share counts as expense">
+          yours −${{ "{:,.2f}".format(t.my_share | abs) }}</small>
+        {% endif %}
+      </td>
+      <td>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <select class="category-select" data-id="{{ t.id }}">
+            <option value="">— none —</option>
+            {% for c in categories %}
+              <option value="{{ c }}" {% if t.category == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+          {% set marks = {'user': '✎ user', 'rule': '⚙ rule', 'claude': '✦ claude'} %}
+          <span class="badge badge-{{ t.category_source or 'none' }}">{{ marks.get(t.category_source, '? none') }}</span>
+        </div>
+      </td>
+      <td style="white-space:nowrap">
+        {% if t.amount < 0 %}
+          {% if t.my_share is none %}
+          <button class="btn-icon split-toggle" data-id="{{ t.id }}" title="Split with friends">✂</button>
+          {% else %}
+          <form method="post" style="display:inline"
+                action="{{ url_for('transactions.unsplit', transaction_id=t.id) }}"
+                onsubmit="return confirm('Remove this split? The full charge becomes your expense again.')">
+            <button class="btn-icon" title="Remove split">⊘</button>
+          </form>
+          {% endif %}
+        {% endif %}
+        <form method="post" style="display:inline"
+              action="{{ url_for('transactions.delete', transaction_id=t.id) }}"
+              onsubmit="return confirm('Delete this transaction?')">
+          <button class="btn-icon" title="Delete">✕</button>
+        </form>
+      </td>
+    </tr>
+    <tr class="split-form-row" id="split-form-{{ t.id }}" style="display:none">
+      <td colspan="7">
+        <form method="post" action="{{ url_for('transactions.split', transaction_id=t.id) }}"
+              style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:4px 0">
+          <strong>Split ${{ "{:,.2f}".format(-t.amount) }} with:</strong>
+          <input type="text" name="names" placeholder="Alex, Priya" required style="width:200px">
+          <input type="text" name="shares" placeholder="custom $ (opt.), e.g. 25, 30" style="width:180px"
+                 title="Leave blank for an equal split including you">
+          <button class="btn btn-primary btn-sm">Split</button>
+          <small class="dim">blank shares = equal split including you</small>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="empty">No transactions found.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if pages > 1 %}
+<div class="pagination">
+  {% for p in range(1, pages + 1) %}
+    <a href="?page={{ p }}&status={{ filters.status or '' }}&account_id={{ filters.account_id or '' }}&category={{ filters.category or '' }}&start_date={{ filters.start_date or '' }}&end_date={{ filters.end_date or '' }}"
+       class="{% if p == page %}active{% endif %}">{{ p }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Mass-categorize: show the bulk bar when rows are checked, inject the
+// selected ids into the (separate) bulk form on submit.
+const bulkBar   = document.getElementById('bulk-bar');
+const bulkCount = document.getElementById('bulk-count');
+const checkAll  = document.getElementById('check-all');
+const rowChecks = () => Array.from(document.querySelectorAll('.row-check'));
+
+function refreshBulkBar() {
+  const checked = rowChecks().filter(c => c.checked);
+  bulkCount.textContent = `${checked.length} selected`;
+  bulkBar.style.display = checked.length ? 'flex' : 'none';
+}
+
+checkAll && checkAll.addEventListener('change', () => {
+  rowChecks().forEach(c => c.checked = checkAll.checked);
+  refreshBulkBar();
+});
+rowChecks().forEach(c => c.addEventListener('change', refreshBulkBar));
+
+document.getElementById('bulk-form').addEventListener('submit', (e) => {
+  const checked = rowChecks().filter(c => c.checked);
+  if (!checked.length) { e.preventDefault(); return; }
+  document.querySelectorAll('#bulk-form input[name="ids"]').forEach(el => el.remove());
+  checked.forEach(c => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'ids';
+    input.value = c.value;
+    e.target.appendChild(input);
+  });
+});
+
+document.querySelectorAll('.split-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const row = document.getElementById('split-form-' + btn.dataset.id);
+    row.style.display = row.style.display === 'none' ? '' : 'none';
+    if (row.style.display !== 'none') row.querySelector('input[name=names]').focus();
+  });
+});
+
+// Inline category override — saves as user-sourced (never reverted by rule re-apply)
+document.querySelectorAll('.category-select').forEach(sel => {
+  sel.addEventListener('change', async function() {
+    const res = await fetch(`/transactions/${this.dataset.id}/category`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({category: this.value}),
+    });
+    if (res.ok) {
+      const badge = this.parentElement.querySelector('.badge');
+      if (badge) { badge.className = 'badge badge-user'; badge.textContent = '✎ user'; }
+      this.style.borderColor = 'var(--pos)';
+      this.style.boxShadow = '0 0 0 3px var(--pos-soft)';
+      setTimeout(() => { this.style.borderColor = ''; this.style.boxShadow = ''; }, 900);
+    }
+  });
+});
+</script>
+{% endblock %}

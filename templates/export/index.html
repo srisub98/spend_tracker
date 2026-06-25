@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Export{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Export</h1>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <h2>📊 Excel Workbook</h2>
+    <p>Generates a <code>.xlsx</code> file with 4 sheets:<br>
+       All Transactions · Spending by Category · Net Worth History · Outstanding Splits</p>
+    <form method="post" action="{{ url_for('exports.excel') }}">
+      <button type="submit" class="btn btn-primary">Export Excel</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>📱 HTML Dashboard</h2>
+    <p>Generates a self-contained <code>.html</code> file with charts and key stats.
+       No internet needed — open directly in any browser or on your phone via iCloud.</p>
+    <form method="post" action="{{ url_for('exports.html') }}">
+      <button type="submit" class="btn btn-primary">Export HTML</button>
+    </form>
+  </div>
+</div>
+
+{% if files %}
+<h2 style="margin-top: 28px;">Recent Exports</h2>
+<table class="data-table">
+  <thead><tr><th>File</th></tr></thead>
+  <tbody>
+  {% for f in files %}
+    <tr><td class="mono">{{ f }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

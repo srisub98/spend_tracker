@@ -1,0 +1,31 @@
+# ── secrets / env ──────────────────────────────────────────────
+.env
+*.env
+# (.env.example ends in .example, so it is NOT ignored — it stays tracked)
+
+# ── real financial data — NEVER commit ─────────────────────────
+data/
+*.db
+*.sqlite3
+
+# ── python ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# ── node / playwright ──────────────────────────────────────────
+node_modules/
+test-results/
+playwright-report/
+.playwright/
+blob-report/
+
+# ── os / local tooling ─────────────────────────────────────────
+.DS_Store
+.claude/settings.local.json
+
+# ── archives / build cruft ─────────────────────────────────────
+*.zip

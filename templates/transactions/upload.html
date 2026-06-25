@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Upload CSV{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Upload Statement</h1>
+  <a href="{{ url_for('transactions.index') }}" class="btn btn-ghost">← Back</a>
+</div>
+
+<div class="card" style="max-width: 540px;">
+  <form method="post" enctype="multipart/form-data" id="upload-form">
+
+    <!-- Drag-and-drop zone -->
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-icon">📂</div>
+      <div class="drop-label">Drop your CSV here, or <span class="drop-link">browse</span></div>
+      <div class="drop-hint">Saved locally to <code>data/uploads/</code></div>
+      <div class="drop-filename" id="drop-filename"></div>
+      <input type="file" name="csv_file" id="csv-file-input" accept=".csv" required>
+    </div>
+
+    <div class="form-group" style="margin-top: 18px;">
+      <label>Account</label>
+      <select name="account_id" required>
+        <option value="">Select account…</option>
+        {% for a in accounts %}
+          <option value="{{ a.id }}">{{ a.name }} ({{ a.type }})</option>
+        {% endfor %}
+      </select>
+      {% if not accounts %}
+        <small><a href="{{ url_for('accounts.index') }}">Create an account first</a></small>
+      {% endif %}
+    </div>
+
+    <button type="submit" class="btn btn-primary" id="submit-btn" {% if not accounts %}disabled{% endif %}>
+      Preview Import
+    </button>
+    <small class="dim" style="display:block; margin-top:8px;">
+      You'll see how the file parses before anything is saved — new banks can be
+      mapped and remembered on the preview screen.
+    </small>
+  </form>
+</div>
+
+{% block scripts %}
+<script>
+const dropZone   = document.getElementById('drop-zone');
+const fileInput  = document.getElementById('csv-file-input');
+const fileLabel  = document.getElementById('drop-filename');
+const submitBtn  = document.getElementById('submit-btn');
+
+function showFile(file) {
+  fileLabel.textContent = file ? `✓ ${file.name}` : '';
+  dropZone.classList.toggle('drop-zone--ready', !!file);
+}
+
+// Click anywhere in zone opens file picker
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => showFile(fileInput.files[0]));
+
+// Drag and drop
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drop-zone--over'); });
+dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drop-zone--over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drop-zone--over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.csv')) {
+    // Assign to the input via DataTransfer
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileInput.files = dt.files;
+    showFile(file);
+  }
+});
+
+// Show spinner on submit
+document.getElementById('upload-form').addEventListener('submit', () => {
+  submitBtn.textContent = 'Importing…';
+  submitBtn.disabled = true;
+});
+</script>
+{% endblock %}
+{% endblock %}

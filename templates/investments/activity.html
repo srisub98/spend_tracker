@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Investment Activity{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Investment Activity</h1>
+  <span class="spacer"></span>
+  <div class="year-selector">
+    {% for y in years %}
+      <a href="{{ url_for('investments.activity', year=y) }}"
+         {% if y == year %}class="is-active"{% endif %}>{{ y }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if income %}
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Dividends {{ year }}</div>
+    <div class="stat-value">${{ "{:,.2f}".format(income.get('dividend', 0)) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Capital Gains {{ year }}</div>
+    <div class="stat-value">${{ "{:,.2f}".format(income.get('capgain_st', 0) + income.get('capgain_lt', 0)) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Interest {{ year }}</div>
+    <div class="stat-value">${{ "{:,.2f}".format(income.get('interest', 0)) }}</div>
+  </div>
+</div>
+{% endif %}
+
+{% if recon %}
+<div class="card" style="margin-bottom:16px;">
+  <h2>Deposits vs Cashflow "Investments" <small class="dim">— should match; a gap means a
+  transfer was miscategorized on the cash side or a statement isn't imported yet</small></h2>
+  <table class="data-table">
+    <thead><tr><th>Month</th><th class="num">Ledger deposits</th>
+      <th class="num">Cashflow Investments</th><th></th></tr></thead>
+    <tbody>
+    {% for r in recon %}
+      <tr>
+        <td class="mono">{{ r.month }}</td>
+        <td class="num mono">{{ "{:,.2f}".format(r.ledger) }}</td>
+        <td class="num mono">{{ "{:,.2f}".format(r.cashflow) }}</td>
+        <td>{% if r.ok %}<span class="positive">✓</span>{% else %}<span class="negative">≠</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<form class="filter-bar" method="get">
+  <input type="hidden" name="year" value="{{ year }}">
+  <select name="account_id">
+    <option value="">All Accounts</option>
+    {% for a in accounts %}
+      <option value="{{ a.id }}" {% if filters.account_id == a.id|string %}selected{% endif %}>{{ a.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="type">
+    <option value="">All Types</option>
+    {% for t in ['buy','sell','dividend','capgain_st','capgain_lt','interest','deposit','withdrawal'] %}
+      <option value="{{ t }}" {% if filters.type == t %}selected{% endif %}>{{ t }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn">Filter</button>
+</form>
+
+<table class="data-table">
+  <thead><tr><th>Date</th><th>Account</th><th>Type</th><th>Symbol</th>
+    <th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th><th>Source</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td class="mono">{{ r.date }}</td>
+      <td>{{ r.account_name }}</td>
+      <td>{{ r.type }}</td>
+      <td class="mono"><strong>{{ r.symbol or '—' }}</strong></td>
+      <td class="num mono">{{ "{:,.4f}".format(r.quantity) if r.quantity else '' }}</td>
+      <td class="num mono">{{ "{:,.2f}".format(r.price) if r.price else '' }}</td>
+      <td class="num mono {% if r.amount < 0 %}negative{% else %}positive{% endif %}">
+        {{ "{:+,.2f}".format(r.amount) }}</td>
+      <td class="dim">{{ r.source }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="empty">No ledger entries for {{ year }} — import a Vanguard
+    statement PDF on the <a href="{{ url_for('net_worth.index') }}">Net Worth</a> page.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

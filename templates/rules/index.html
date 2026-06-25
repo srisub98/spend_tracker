@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Rules{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Categorization Rules</h1>
+  <form method="post" action="{{ url_for('rules.reapply') }}"
+        onsubmit="return confirm('Re-run all active rules over rule/Claude/uncategorized transactions? User-set categories are never touched.')">
+    <button class="btn btn-warning">↻ Re-apply rules to existing transactions</button>
+  </form>
+</div>
+
+<p class="dim">Checked in priority order (lower first), first match wins.
+New uploads use these automatically; use Re-apply to fix history after editing.</p>
+
+<div class="two-col">
+  <!-- Rule list -->
+  <div>
+    <div style="max-height: 600px; overflow-y: auto;">
+      <table class="data-table">
+        <thead>
+          <tr><th>Prio</th><th>Pattern</th><th>Type</th><th>Category</th><th>Active</th><th></th><th></th></tr>
+        </thead>
+        <tbody>
+        {% for r in rules %}
+          <tr {% if not r.active %}style="opacity:.45"{% endif %}>
+            <td class="mono">{{ r.priority }}</td>
+            <td class="mono">{{ r.pattern }}</td>
+            <td><span class="badge">{{ r.match_type[:5] }}</span></td>
+            <td>{{ r.category }}</td>
+            <td>
+              <form method="post" action="{{ url_for('rules.toggle', rule_id=r.id) }}">
+                <button class="btn-icon" title="Toggle active">{{ '●' if r.active else '○' }}</button>
+              </form>
+            </td>
+            <td><a href="{{ url_for('rules.index', edit=r.id) }}" title="Edit">✎</a></td>
+            <td>
+              <form method="post" action="{{ url_for('rules.delete', rule_id=r.id) }}"
+                    onsubmit="return confirm('Delete rule?')">
+                <button class="btn-icon" title="Delete">✕</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="dim" style="margin-top:8px;">{{ rules | length }} rules</p>
+  </div>
+
+  <!-- Add / edit form + tester -->
+  <div class="card">
+    <h2>{{ "Edit Rule" if edit_rule else "Add Rule" }}</h2>
+    <form method="post"
+          action="{{ url_for('rules.edit', rule_id=edit_rule.id) if edit_rule else url_for('rules.create') }}">
+      <div class="form-group">
+        <label>Pattern</label>
+        <input type="text" name="pattern" id="rule-pattern" required
+               value="{{ edit_rule.pattern if edit_rule else prefill_pattern }}"
+               placeholder="e.g. leetcode">
+        <small>Substring = case-insensitive "contains". Tip: trim to the stable part of the merchant name.</small>
+      </div>
+      <div class="form-group">
+        <label>Match type</label>
+        <select name="match_type" id="rule-match-type">
+          <option value="substring" {% if not edit_rule or edit_rule.match_type == 'substring' %}selected{% endif %}>substring</option>
+          <option value="regex" {% if edit_rule and edit_rule.match_type == 'regex' %}selected{% endif %}>regex</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <select name="category" required>
+          <option value="">— pick —</option>
+          {% for c in categories %}
+            <option value="{{ c.name }}"
+              {% if (edit_rule and edit_rule.category == c.name) or (not edit_rule and prefill_category == c.name) %}selected{% endif %}>
+              {{ c.name }} ({{ c.kind }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Priority</label>
+        <input type="number" name="priority" value="{{ edit_rule.priority if edit_rule else 50 }}">
+        <small>Lower = checked earlier. Seeded rules run 10–200; use ≤50 to beat them.</small>
+      </div>
+      {% if edit_rule %}
+      <div class="form-group">
+        <label><input type="checkbox" name="active" value="1" {% if edit_rule.active %}checked{% endif %}> Active</label>
+      </div>
+      {% endif %}
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn" id="test-btn">Test against history</button>
+        <button type="submit" class="btn btn-primary">{{ "Save" if edit_rule else "Add Rule" }}</button>
+        {% if edit_rule %}<a href="{{ url_for('rules.index') }}" class="btn btn-ghost">Cancel</a>{% endif %}
+      </div>
+    </form>
+
+    <div id="test-results" style="margin-top:14px;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('test-btn').addEventListener('click', async () => {
+  const pattern = document.getElementById('rule-pattern').value;
+  const matchType = document.getElementById('rule-match-type').value;
+  const box = document.getElementById('test-results');
+  if (!pattern) { box.innerHTML = '<p class="dim">Enter a pattern first.</p>'; return; }
+  const res = await fetch(`{{ url_for('rules.test') }}?pattern=${encodeURIComponent(pattern)}&match_type=${matchType}`);
+  const data = await res.json();
+  if (data.error) { box.innerHTML = `<p class="negative">${data.error}</p>`; return; }
+  let html = `<p><strong>${data.count}</strong> existing transactions match.</p>`;
+  if (data.sample.length) {
+    html += '<table class="data-table"><tr><th>Date</th><th>Description</th><th>Now</th></tr>';
+    for (const t of data.sample) {
+      html += `<tr><td class="mono">${t.date}</td><td class="desc">${t.description}</td>
+               <td>${t.category ? `<span class="badge">${t.category}</span>` : '<span class="dim">—</span>'}</td></tr>`;
+    }
+    html += '</table>';
+  }
+  box.innerHTML = html;
+});
+</script>
+{% endblock %}

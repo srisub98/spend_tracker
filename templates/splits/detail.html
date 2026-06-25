@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ outing.title }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ outing.title }}</h1>
+  <span class="meta">{{ outing.outing_date }}</span>
+  <a href="{{ url_for('splits.index') }}" class="btn btn-ghost">← Back</a>
+</div>
+
+<div class="two-col">
+  <!-- Expenses -->
+  <div>
+    <h2>Expenses</h2>
+    {% if summary['items'] %}
+    <table class="data-table">
+      <thead><tr><th>Item</th><th>Total</th><th>Split</th><th>Per Person</th><th></th></tr></thead>
+      <tbody>
+      {% for item in summary['items'] %}
+        <tr>
+          <td>{{ item.description }}</td>
+          <td class="mono">${{ "{:,.2f}".format(item.total_amount) }}</td>
+          <td class="mono">{{ item.split_count }} ways</td>
+          <td class="mono">${{ "{:,.2f}".format(item.per_person_amount) }}</td>
+          <td>
+            <form method="post" action="{{ url_for('splits.delete_item', outing_id=outing.id, item_id=item.id) }}">
+              <button class="btn-icon">✕</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="empty">No items yet.</p>
+    {% endif %}
+
+    <div class="card" style="margin-top: 16px;">
+      <h3>Add Expense</h3>
+      <form method="post" action="{{ url_for('splits.add_item', outing_id=outing.id) }}">
+        <div class="form-row">
+          <input type="text"   name="description"  placeholder="Description" required>
+          <input type="number" name="total_amount"  placeholder="Total $"  step="0.01" required>
+          <input type="number" name="split_count"   placeholder="Split ways" value="{{ (summary.participants | length) + 1 }}" min="2">
+          <button type="submit" class="btn btn-primary">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- People -->
+  <div>
+    <h2>People</h2>
+    {% if summary.participants %}
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Owes You</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for p in summary.participants %}
+        {% set owed = summary.per_person_shares.get(p.id, 0) %}
+        <tr>
+          <td>{{ p.name }}</td>
+          <td class="mono">${{ "{:,.2f}".format(owed) }}</td>
+          <td>
+            {% if p.is_paid %}
+              <span class="badge badge-paid">Paid ✓</span>
+            {% else %}
+              <span class="badge badge-owed">Owes</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.is_paid %}
+              <form method="post" action="{{ url_for('splits.mark_unpaid', outing_id=outing.id, participant_id=p.id) }}">
+                <button class="btn btn-ghost" style="font-size:.8rem;">Undo</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('splits.mark_paid', outing_id=outing.id, participant_id=p.id) }}">
+                <button class="btn btn-primary" style="font-size:.8rem;">Mark Paid</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="empty">No participants yet.</p>
+    {% endif %}
+
+    <div class="card" style="margin-top: 16px;">
+      <h3>Add Person</h3>
+      <form method="post" action="{{ url_for('splits.add_participant', outing_id=outing.id) }}">
+        <div class="form-row">
+          <input type="text" name="name" placeholder="Name" required>
+          <button type="submit" class="btn btn-primary">Add</button>
+        </div>
+      </form>
+    </div>
+
+    {% if summary['items'] %}
+    <div class="card" style="margin-top: 12px; background: #f0f7ff;">
+      <strong>Total you fronted:</strong> ${{ "{:,.2f}".format(summary.total_you_fronted) }}<br>
+      <strong>Total owed to you:</strong>
+      ${{ "{:,.2f}".format(summary.per_person_shares.values() | sum) }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Statement Preview{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Vanguard Statement Preview</h1>
+  <span class="dim">{{ stmt.statement_date }} · nothing saved yet</span>
+</div>
+
+{% for p in stmt.problems %}
+<div class="flash flash-error">⚠ {{ p }}</div>
+{% endfor %}
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Account Value</div>
+    <div class="stat-value">${{ "{:,.2f}".format(stmt.total_value) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Holdings</div>
+    <div class="stat-value">{{ stmt.holdings | length }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Ledger Entries (trades + cash)</div>
+    <div class="stat-value">{{ stmt.activity | length }}</div>
+  </div>
+  {% if stmt.income_ytd %}
+  <div class="stat-card">
+    <div class="stat-label">YTD Income (div + gains)</div>
+    <div class="stat-value">${{ "{:,.2f}".format(stmt.income_ytd.values() | sum) }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card table-scroll" style="margin-bottom:16px;">
+  <h2>Holdings (with cost basis)</h2>
+  <table class="data-table">
+    <thead><tr><th>Symbol</th><th>Description</th><th class="num">Qty</th>
+      <th class="num">Price</th><th class="num">Value</th><th class="num">Cost Basis</th>
+      <th class="num">Unrealized</th><th>Type</th></tr></thead>
+    <tbody>
+    {% for h in stmt.holdings %}
+      <tr>
+        <td class="mono"><strong>{{ h.symbol or 'CASH' }}</strong></td>
+        <td class="desc">{{ h.description }}</td>
+        <td class="num mono">{{ "{:,.4f}".format(h.quantity) if h.quantity else '—' }}</td>
+        <td class="num mono">{{ "{:,.2f}".format(h.price) if h.price else '—' }}</td>
+        <td class="num mono">{{ "{:,.2f}".format(h.market_value) }}</td>
+        <td class="num mono">{{ "{:,.2f}".format(h.cost_basis) if h.cost_basis else '—' }}</td>
+        <td class="num mono {% if h.unrealized and h.unrealized < 0 %}negative{% elif h.unrealized %}positive{% endif %}">
+          {{ "{:+,.2f}".format(h.unrealized) if h.unrealized is not none else '—' }}</td>
+        <td class="dim">{{ h.asset_type }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card table-scroll" style="margin-bottom:16px;">
+  <h2>Activity → investment ledger</h2>
+  <table class="data-table">
+    <thead><tr><th>Date</th><th>Type</th><th>Symbol</th><th class="num">Qty</th>
+      <th class="num">Price</th><th class="num">Amount</th></tr></thead>
+    <tbody>
+    {% for a in stmt.activity %}
+      <tr>
+        <td class="mono">{{ a.date }}</td>
+        <td>{{ a.type }}</td>
+        <td class="mono">{{ a.symbol or '—' }}</td>
+        <td class="num mono">{{ "{:,.4f}".format(a.quantity) if a.quantity else '' }}</td>
+        <td class="num mono">{{ "{:,.2f}".format(a.price) if a.price else '' }}</td>
+        <td class="num mono {% if a.amount < 0 %}negative{% else %}positive{% endif %}">
+          {{ "{:+,.2f}".format(a.amount) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="empty">No completed transactions this statement.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ url_for('net_worth.statement_confirm') }}"
+        style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+    <input type="hidden" name="filename" value="{{ filename }}">
+    <label>Import into account:
+      <select name="account_id" required>
+        {% for a in accounts %}
+          <option value="{{ a.id }}" {% if a.id == matched_account_id %}selected{% endif %}>{{ a.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if stmt.account_ref %}
+    <label><input type="checkbox" name="save_ref" value="1"
+           {% if not matched_account_id %}checked{% endif %}>
+      remember account # ({{ stmt.account_ref }})</label>
+    {% endif %}
+    <button class="btn btn-primary">Confirm import</button>
+    <a href="{{ url_for('net_worth.index') }}" class="btn btn-ghost">Cancel</a>
+  </form>
+</div>
+{% endblock %}

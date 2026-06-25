@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Bill Splits{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Bill Splits</h1>
+  <a href="{{ url_for('splits.people') }}" class="btn btn-primary">Settle Up →</a>
+</div>
+
+{% if total_owed %}
+<div class="card" style="margin-bottom: 20px;">
+  <strong>Outstanding (${{ "{:,.2f}".format(receivable) }} total):</strong>
+  {% for row in total_owed %}
+    <span class="badge badge-owed">{{ row.name }}: ${{ "{:,.2f}".format(row.owed) }}</span>
+  {% endfor %}
+  <small class="dim" style="display:block; margin-top:6px;">Tip: split an imported charge
+  directly from the Transactions page (✂) — the dashboard then counts only your share.
+  Enter this total on the Venmo/AppleCash line when you snapshot net worth.</small>
+</div>
+{% endif %}
+
+<div class="two-col">
+  <div>
+    {% if outings %}
+    <table class="data-table">
+      <thead><tr><th>Outing</th><th>Date</th><th></th></tr></thead>
+      <tbody>
+      {% for o in outings %}
+        <tr>
+          <td><a href="{{ url_for('splits.detail', outing_id=o.id) }}">{{ o.title }}</a></td>
+          <td class="mono">{{ o.outing_date }}</td>
+          <td>
+            <form method="post" action="{{ url_for('splits.delete', outing_id=o.id) }}"
+                  onsubmit="return confirm('Delete this outing?')">
+              <button class="btn-icon">✕</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="empty">No outings yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>New Outing</h2>
+    <form method="post" action="{{ url_for('splits.new') }}">
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" name="title" placeholder="e.g. Dinner at Nobu" required>
+      </div>
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" name="outing_date" required>
+      </div>
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <input type="text" name="notes">
+      </div>
+      <button type="submit" class="btn btn-primary">Create</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

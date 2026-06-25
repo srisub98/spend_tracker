@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Finance Tracker{% endblock %}</title>
+  {# Robustness: animations/hidden states only apply under html.js — no-JS renders fully visible #}
+  <script>document.documentElement.classList.add('js');</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+  <nav>
+    <a href="{{ url_for('dashboard.index') }}" class="brand"><span class="mark">F</span>Finance</a>
+    <div class="nav-links">
+      <a href="{{ url_for('dashboard.index') }}"    {% if request.blueprint == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
+      <a href="{{ url_for('transactions.index') }}" {% if request.blueprint == 'transactions' %}class="active"{% endif %}>Transactions</a>
+      <a href="{{ url_for('rules.index') }}"        {% if request.blueprint == 'rules' %}class="active"{% endif %}>Rules</a>
+      <a href="{{ url_for('accounts.index') }}"     {% if request.blueprint == 'accounts' %}class="active"{% endif %}>Accounts</a>
+      <a href="{{ url_for('net_worth.index') }}"    {% if request.blueprint == 'net_worth' %}class="active"{% endif %}>Net Worth</a>
+      <a href="{{ url_for('investments.index') }}"  {% if request.blueprint == 'investments' %}class="active"{% endif %}>Investments</a>
+      <a href="{{ url_for('insights.index') }}"     {% if request.blueprint == 'insights' %}class="active"{% endif %}>Insights</a>
+      <a href="{{ url_for('life.index') }}"         {% if request.blueprint == 'life' %}class="active"{% endif %}>Life</a>
+      <a href="{{ url_for('splits.index') }}"       {% if request.blueprint == 'splits' %}class="active"{% endif %}>Splits</a>
+      <a href="{{ url_for('exports.index') }}"      {% if request.blueprint == 'exports' %}class="active"{% endif %}>Export</a>
+    </div>
+    <div class="nav-aside">
+      <span class="nav-chip">FY {{ fy_year }}</span>
+      <div class="avatar">SS</div>
+    </div>
+  </nav>
+
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

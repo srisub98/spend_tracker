@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Settle Up{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Settle Up</h1>
+  <a href="{{ url_for('splits.index') }}" class="btn btn-ghost">← Outings</a>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Owed to You (unsettled)</div>
+    <div class="stat-value">${{ "{:,.2f}".format(receivable) }}</div>
+  </div>
+</div>
+
+{% for p in ledger %}
+<div class="card" style="margin-bottom: 14px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <h2 style="margin:0">{{ p.name }}
+      {% if p.owed > 0 %}<span class="badge badge-owed">owes you ${{ "{:,.2f}".format(p.owed) }}</span>
+      {% else %}<span class="badge">settled</span>{% endif %}
+    </h2>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <form method="post" action="{{ url_for('splits.set_venmo', person_id=p.person_id) }}"
+            style="display:flex; gap:4px;">
+        <input type="text" name="venmo_handle" placeholder="@venmo" value="{{ p.venmo_handle or '' }}"
+               style="width:110px">
+        <button class="btn btn-ghost" title="Save Venmo handle">✓</button>
+      </form>
+      {% if p.owed > 0 and p.person_id != -1 %}
+      <form method="post" action="{{ url_for('splits.settle', person_id=p.person_id) }}"
+            onsubmit="return confirm('Mark everything {{ p.name }} owes as paid?')">
+        <button class="btn btn-primary">Settle up</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% if p.unpaid_items %}
+  <table class="data-table" style="margin-top:8px;">
+    <thead><tr><th>Outing</th><th>Date</th><th class="num">Share</th></tr></thead>
+    <tbody>
+    {% for it in p.unpaid_items %}
+      <tr>
+        <td><a href="{{ url_for('splits.detail', outing_id=it.outing_id) }}">{{ it.title }}</a></td>
+        <td class="mono">{{ it.outing_date }}</td>
+        <td class="num mono">{{ "{:,.2f}".format(it.share) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if p.history %}
+  <small class="dim">{{ p.history | length }} settled item(s), ${{ "{:,.2f}".format(p.settled) }} lifetime.</small>
+  {% endif %}
+</div>
+{% else %}
+<p class="empty">No splits yet — use the ✂ button on any transaction, or add participants to an outing.</p>
+{% endfor %}
+{% endblock %}

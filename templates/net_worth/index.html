@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Net Worth{% endblock %}
+
+{% macro money(v) -%}
+  {%- if v is none -%}<span class="dim">—</span>{%- else -%}{{ "{:,.0f}".format(v) }}{%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Net Worth</h1>
+  <span class="spacer"></span>
+  <div class="year-selector">
+    {% for y in years %}
+      <a href="{{ url_for('net_worth.index', year=y) }}"
+         {% if y == year %}class="is-active"{% endif %}>{{ y }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if current is not none %}
+  <div class="stat-grid">
+    <div class="stat-card is-hero reveal">
+      <div class="stat-label">Current Net Worth</div>
+      <div class="stat-value" data-count="{{ '%.0f' % current }}" data-prefix="$">${{ "{:,.0f}".format(current) }}</div>
+      <div class="stat-foot">
+        {% if yoy_pct is not none %}
+        <span class="trend {% if yoy_pct >= 0 %}trend-up{% else %}trend-down{% endif %}">
+          <span class="arrow">{% if yoy_pct >= 0 %}▲{% else %}▼{% endif %}</span> {{ "{:.1%}".format(yoy_pct | abs) }}</span>
+        {% endif %}
+        {% if yoy is not none %}<span class="stat-note">vs last year · {{ "{:+,.0f}".format(yoy) }}</span>{% endif %}
+      </div>
+      {% if nw_spark | length > 1 %}<svg class="spark" data-values="{{ nw_spark | join(',') }}" data-color="#ffffff"></svg>{% endif %}
+    </div>
+    <div class="stat-card reveal" data-delay=".05">
+      <div class="stat-label">vs Last Month</div>
+      <div class="stat-value {% if mom and mom >= 0 %}positive{% elif mom %}negative{% endif %}"
+           {% if mom is not none %}data-count="{{ '%.0f' % mom }}" data-prefix="{{ '+$' if mom >= 0 else '−$' }}"{% endif %}>
+        {{ "{:+,.0f}".format(mom) if mom is not none else "—" }}</div>
+      {% if mom_pct is not none %}
+      <div class="stat-foot"><span class="trend {% if mom_pct >= 0 %}trend-up{% else %}trend-down{% endif %}">
+        <span class="arrow">{% if mom_pct >= 0 %}▲{% else %}▼{% endif %}</span> {{ "{:.1%}".format(mom_pct | abs) }}</span></div>
+      {% endif %}
+    </div>
+    <div class="stat-card reveal" data-delay=".1">
+      <div class="stat-label">vs Last Year</div>
+      <div class="stat-value {% if yoy and yoy >= 0 %}positive{% elif yoy %}negative{% endif %}"
+           {% if yoy is not none %}data-count="{{ '%.0f' % yoy }}" data-prefix="{{ '+$' if yoy >= 0 else '−$' }}"{% endif %}>
+        {{ "{:+,.0f}".format(yoy) if yoy is not none else "—" }}</div>
+      {% if yoy_pct is not none %}
+      <div class="stat-foot"><span class="trend {% if yoy_pct >= 0 %}trend-up{% else %}trend-down{% endif %}">
+        <span class="arrow">{% if yoy_pct >= 0 %}▲{% else %}▼{% endif %}</span> {{ "{:.1%}".format(yoy_pct | abs) }}</span></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card chart-card reveal">
+    <h2>Net Worth by Asset Class <span class="h2-meta">Stacked · full history</span></h2>
+    <canvas id="nwChart" height="80"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--c-ink)"></i> Stocks</span>
+      <span><i style="background:var(--c-green)"></i> Cash</span>
+      <span><i style="background:var(--c-slate)"></i> Retirement</span>
+      <span><i style="background:var(--c-amber)"></i> Other</span>
+    </div>
+  </div>
+
+  {% if grid.months %}
+  <div class="card table-scroll reveal">
+    <h2>Account Balances <span class="h2-meta">{{ year }}</span></h2>
+    <table class="data-table pivot-table">
+      <thead>
+        <tr><th>Account</th>
+          {% for m in grid.months %}<th class="num">{{ ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m-1] }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for cls in class_order %}
+          {% set cls_accounts = grid.accounts | selectattr("asset_class", "equalto", cls) | list %}
+          {% if cls_accounts %}
+            {% for a in cls_accounts %}
+              <tr><td>{{ a.name }}</td>
+                {% for m in grid.months %}<td class="num mono">{{ money(a.by_month.get(m)) }}</td>{% endfor %}
+              </tr>
+            {% endfor %}
+            <tr class="grid-class-row"><td>{{ cls | capitalize }}</td>
+              {% for m in grid.months %}<td class="num mono">{{ money(grid.class_totals.get(cls, {}).get(m)) }}</td>{% endfor %}
+            </tr>
+          {% endif %}
+        {% endfor %}
+        <tr class="total-row"><td>Net Worth</td>
+          {% for m in grid.months %}<td class="num mono">{{ money(grid.net_worth.get(m)) }}</td>{% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+{% else %}
+  <p class="empty">No snapshots yet. Record your first one below.</p>
+{% endif %}
+
+{% if holdings %}
+<div class="card table-scroll reveal" style="margin-bottom: 18px;">
+  <h2>Holdings <span class="h2-meta">as of {{ holdings_date }} · ${{ "{:,.0f}".format(holdings_total) }} ·
+    <a href="{{ url_for('investments.index') }}">full view →</a></span></h2>
+  <table class="data-table">
+    <thead><tr><th>Symbol</th><th>Description</th><th class="num">Qty</th><th class="num">Value</th><th class="num">% of holdings</th><th>Accounts</th></tr></thead>
+    <tbody>
+    {% for h in holdings %}
+      <tr>
+        <td class="mono">{{ h.symbol }}</td>
+        <td class="desc">{{ h.description }}</td>
+        <td class="num mono">{{ "{:,.3f}".format(h.quantity) if h.quantity is not none else '—' }}</td>
+        <td class="num mono">{{ "{:,.0f}".format(h.value) }}</td>
+        <td class="num mono">{{ "{:.1%}".format(h.value / holdings_total) if holdings_total else '' }}</td>
+        <td class="dim">{{ h.accounts }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card reveal" style="margin-bottom: 18px;">
+  <h2>Schwab Direct Sync</h2>
+  {% if not schwab_configured %}
+    <p class="dim">Not configured. Register a free app at
+      <a href="https://developer.schwab.com" target="_blank">developer.schwab.com</a>
+      (product: "Accounts and Trading Production", callback <code>https://127.0.0.1</code>),
+      wait for "Ready for use", then set <code>SCHWAB_APP_KEY</code> /
+      <code>SCHWAB_APP_SECRET</code> in <code>.env</code> and restart. Setup steps in README.</p>
+  {% elif not schwab_status or schwab_status.expired %}
+    <p class="dim">
+      {% if schwab_status and schwab_status.expired %}Connection expired (Schwab refresh tokens last 7 days).{% endif %}
+      <strong>Step 1:</strong> <a href="{{ schwab_auth_url }}" target="_blank">Log in to Schwab ↗</a> —
+      after login you'll land on a https://127.0.0.1 error page; that's expected.
+      <strong>Step 2:</strong> paste that page's full address-bar URL here within ~30 seconds:
+    </p>
+    <form method="post" action="{{ url_for('net_worth.schwab_exchange') }}" style="display:flex; gap:8px;">
+      <input type="text" name="redirect_url" placeholder="https://127.0.0.1/?code=…" style="flex:1" required>
+      <button class="btn btn-primary">Connect</button>
+    </form>
+  {% else %}
+    <form method="post" action="{{ url_for('net_worth.schwab_sync') }}" style="display:flex; gap:12px; align-items:center;">
+      <button class="btn btn-primary">⟳ Sync Schwab now</button>
+      <span class="dim">Connected — re-login needed in {{ schwab_status.days_left }} day(s).
+        Pulls balances + positions for all Schwab accounts into today's snapshot.</span>
+    </form>
+  {% endif %}
+</div>
+
+<div class="two-col">
+  <div class="card reveal">
+    <h2>Upload Holdings CSV</h2>
+    <p class="dim">Schwab "Positions" export or Vanguard download-center CSV.
+       You'll preview before anything is saved; balances merge into the snapshot
+       for the date you pick.</p>
+    <form method="post" action="{{ url_for('net_worth.holdings_preview') }}" enctype="multipart/form-data">
+      <div class="form-group">
+        <input type="file" name="holdings_file" accept=".csv" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Preview Holdings</button>
+    </form>
+    <hr style="margin: 18px 0; border: none; border-top: 1px solid #eee;">
+    <h2>Upload Vanguard Statement (PDF)</h2>
+    <p class="dim">The monthly statement beats the CSV: cost basis, unrealized gains,
+       trades, and deposits all import — holdings into the statement-date snapshot,
+       activity into the <a href="{{ url_for('investments.activity') }}">investment ledger</a>.</p>
+    <form method="post" action="{{ url_for('net_worth.statement_preview') }}" enctype="multipart/form-data">
+      <div class="form-group">
+        <input type="file" name="statement_file" accept=".pdf" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Preview Statement</button>
+    </form>
+    <hr style="margin: 18px 0; border: none; border-top: 1px solid #eee;">
+    <h2>Record Snapshot</h2>
+    <form method="post" action="{{ url_for('net_worth.snapshot') }}">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" name="snapshot_date" required value="{{ today }}">
+      </div>
+      {% if accounts %}
+        <div class="form-group">
+          <label>Account Balances</label>
+          <small>Prefilled with last recorded values — adjust and save. Clear a field to skip that account.</small>
+          {% for a in accounts %}
+            <div class="balance-row">
+              <span>{{ a.name }} <em class="dim">({{ a.asset_class or a.type }}{% if a.is_liability %}, liability{% endif %})</em>
+                {% if receivable and ('venmo' in a.name|lower or 'apple' in a.name|lower) %}
+                  <br><small class="dim">friends owe you ${{ "{:,.2f}".format(receivable) }}
+                  (<a href="{{ url_for('splits.people') }}">settle up</a>) — include it here if you count IOUs</small>
+                {% endif %}
+              </span>
+              <input type="number" step="0.01" name="balance_{{ a.id }}"
+                     value="{{ latest_balances.get(a.id, '') }}" placeholder="—" style="width: 130px;">
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p><a href="{{ url_for('accounts.index') }}">Add accounts first</a></p>
+      {% endif %}
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <input type="text" name="notes" placeholder="e.g. End of month snapshot">
+      </div>
+      <button type="submit" class="btn btn-primary">Save Snapshot</button>
+    </form>
+  </div>
+
+  <div class="card reveal">
+    <h2>Snapshot History</h2>
+    <div style="max-height: 420px; overflow-y: auto;">
+      <table class="data-table">
+        <thead><tr><th>Date</th><th class="num">Net Worth</th><th>Source</th></tr></thead>
+        <tbody>
+        {% for s in snapshots %}
+          <tr>
+            <td class="mono">{{ s.snapshot_date }}</td>
+            <td class="num mono {% if s.net_worth >= 0 %}positive{% else %}negative{% endif %}">
+              ${{ "{:,.0f}".format(s.net_worth) }}</td>
+            <td><span class="badge">{{ s.source }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.addEventListener('load', () => {
+  if (!window.Chart) return;
+  FT.theme();
+  const c = FT.colors();
+  const dates  = {{ chart_dates | tojson }};
+  const series = {{ class_series | tojson }};
+  const colors = { stocks: c.ink, cash: c.green, retirement: c.slate, other: c.amber };
+
+  new Chart(document.getElementById('nwChart'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: Object.entries(series).map(([cls, data]) => ({
+        label: cls.charAt(0).toUpperCase() + cls.slice(1),
+        data, borderColor: colors[cls], backgroundColor: colors[cls] + '22',
+        fill: true, tension: .3, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2,
+      })),
+    },
+    options: {
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { stacked: true, grid: { display: false }, border: { display: false },
+             ticks: { maxTicksLimit: 16 } },
+        y: { stacked: true, grid: { color: c.grid }, border: { display: false },
+             ticks: { callback: v => '$' + (v/1000) + 'k' } },
+      },
+      plugins: { tooltip: { callbacks: { label: x => ' ' + x.dataset.label + ': $' + x.raw.toLocaleString() } } },
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}Dashboard {{ d.year }} — Finance{% endblock %}
+
+{% macro money(v, dash_zero=True) -%}
+  {%- if v is none or (dash_zero and v == 0) -%}<span class="dim">—</span>
+  {%- else -%}{{ "{:,.0f}".format(v) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro trend(cur, old, invert=False) -%}
+  {%- if old -%}
+    {%- set pct = (cur - old) / old -%}
+    {%- set up = pct >= 0 -%}
+    {%- set good = (not up) if invert else up -%}
+    <span class="trend {% if good %}trend-up{% else %}trend-down{% endif %}">
+      <span class="arrow">{% if up %}▲{% else %}▼{% endif %}</span> {{ "{:.1%}".format(pct | abs) }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <span class="sub">Fiscal year overview</span>
+  <span class="spacer"></span>
+  <div class="year-selector">
+    {% for y in d.years %}
+      <a href="{{ url_for('dashboard.index', year=y) }}"
+         {% if y == d.year %}class="is-active"{% endif %}>{{ y }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card is-hero reveal" data-delay="0">
+    <div class="stat-label">Net Income · {{ d.year }}</div>
+    <div class="stat-value" data-count="{{ '%.0f' % d.ytd.net }}" data-prefix="$">${{ "{:,.0f}".format(d.ytd.net) }}</div>
+    <div class="stat-foot">
+      {{ trend(d.ytd.net, prev.net if prev else None) }}
+      {% if prev %}<span class="stat-note">vs ${{ "{:,.0f}".format(prev.net) }} in {{ d.year - 1 }}</span>{% endif %}
+    </div>
+    <svg class="spark" data-values="{{ d.net | join(',') }}" data-color="#ffffff"></svg>
+  </div>
+
+  <div class="stat-card reveal" data-delay=".05">
+    <div class="stat-label">Income</div>
+    <div class="stat-value positive" data-count="{{ '%.0f' % d.ytd.income }}" data-prefix="$">${{ "{:,.0f}".format(d.ytd.income) }}</div>
+    <div class="stat-foot">{{ trend(d.ytd.income, prev.income if prev else None) }}</div>
+    <svg class="spark" data-values="{{ d.income_total | join(',') }}" data-color="var(--c-green)"></svg>
+  </div>
+
+  {% set base = d.income_rows | selectattr("name", "equalto", "Paycheck") | list %}
+  <div class="stat-card reveal" data-delay=".1">
+    <div class="stat-label">Base Pay</div>
+    <div class="stat-value" data-count="{{ '%.0f' % (base[0].total if base else 0) }}" data-prefix="$">${{ "{:,.0f}".format(base[0].total if base else 0) }}</div>
+    {% if base %}<svg class="spark" data-values="{{ base[0].by_month | join(',') }}" data-color="var(--c-slate)"></svg>{% endif %}
+  </div>
+
+  <div class="stat-card reveal" data-delay=".15">
+    <div class="stat-label">Expenses</div>
+    <div class="stat-value negative" data-count="{{ '%.0f' % d.ytd.expenses }}" data-prefix="$">${{ "{:,.0f}".format(d.ytd.expenses) }}</div>
+    <div class="stat-foot">{{ trend(d.ytd.expenses, prev.expenses if prev else None, invert=True) }}</div>
+    <svg class="spark" data-values="{{ d.expense_total | join(',') }}" data-color="var(--c-clay)"></svg>
+  </div>
+
+  <div class="stat-card reveal" data-delay=".2">
+    <div class="stat-label">Savings Rate</div>
+    <div class="stat-value" {% if d.ytd.savings_rate is not none %}data-count="{{ '%.1f' % (100 * d.ytd.savings_rate) }}" data-decimals="1" data-suffix="%"{% endif %}>
+      {{ "{:.1%}".format(d.ytd.savings_rate) if d.ytd.savings_rate is not none else "—" }}</div>
+    <div class="stat-foot">
+      {% if prev and prev.savings_rate is not none and d.ytd.savings_rate is not none %}
+        {% set dpp = 100 * (d.ytd.savings_rate - prev.savings_rate) %}
+        <span class="trend {% if dpp >= 0 %}trend-up{% else %}trend-down{% endif %}">
+          <span class="arrow">{% if dpp >= 0 %}▲{% else %}▼{% endif %}</span> {{ "%.1f" % (dpp | abs) }}pp</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="stat-card reveal" data-delay=".25">
+    <div class="stat-label">Invested</div>
+    <div class="stat-value" data-count="{{ '%.0f' % d.ytd.investments }}" data-prefix="$">${{ "{:,.0f}".format(d.ytd.investments) }}</div>
+    <div class="stat-foot">{{ trend(d.ytd.investments, prev.investments if prev else None) }}</div>
+    <svg class="spark" data-values="{{ d.investments | join(',') }}" data-color="var(--c-slate)"></svg>
+  </div>
+
+  <div class="stat-card reveal" data-delay=".3">
+    <div class="stat-label">Free Cash Flow</div>
+    <div class="stat-value" data-count="{{ '%.0f' % d.ytd.fcf }}" data-prefix="$">${{ "{:,.0f}".format(d.ytd.fcf) }}</div>
+    <div class="stat-foot">{{ trend(d.ytd.fcf, prev.fcf if prev else None) }}</div>
+    <svg class="spark" data-values="{{ d.fcf | join(',') }}" data-color="var(--c-amber)"></svg>
+  </div>
+</div>
+
+{% if quarters %}
+<div class="card reveal" style="margin-bottom:20px;">
+  <h2>Quarterly Summary <span class="h2-meta">Q{{ quarters.n }} {{ quarters.year }} vs.
+    Q{{ quarters.qoq_n }} {{ quarters.qoq_year }} (QoQ) and Q{{ quarters.n }} {{ quarters.yoy_year }} (YoY)</span></h2>
+  <div class="stat-grid" style="margin-top:10px;">
+    {% for label, key, cls, invert in [("Income","income_total","positive",False),
+                                        ("Expenses","expense_total","negative",True),
+                                        ("Net Income","net","",False)] %}
+    <div class="stat-card reveal" data-delay="{{ '%.2f' % (loop.index0 * 0.05) }}">
+      <div class="stat-label">{{ label }}</div>
+      <div class="stat-value {{ cls }}" data-count="{{ '%.0f' % quarters.cur[key] }}" data-prefix="$">
+        ${{ "{:,.0f}".format(quarters.cur[key]) }}</div>
+      {% if quarters.qoq %}
+      <div class="stat-foot"><small class="dim" style="width:34px;">QoQ</small>
+        {{ trend(quarters.cur[key], quarters.qoq[key], invert=invert) }}</div>
+      {% endif %}
+      {% if quarters.yoy %}
+      <div class="stat-foot"><small class="dim" style="width:34px;">YoY</small>
+        {{ trend(quarters.cur[key], quarters.yoy[key], invert=invert) }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if budget_strip %}
+<div class="card reveal" style="margin-bottom:20px;">
+  <h2>{{ month_name }} vs Budget <span class="h2-meta">edit on <a href="{{ url_for('insights.index') }}">Insights</a></span></h2>
+  <div style="display:flex; gap:16px; flex-wrap:wrap;">
+    {% for b in budget_strip %}
+      {% set frac = (b.spent / b.budget) if b.budget else 0 %}
+      <div style="min-width:130px;">
+        <small>{{ b.category }} <span class="dim mono">{{ "{:,.0f}".format(b.spent) }}/{{ "{:,.0f}".format(b.budget) }}</span></small>
+        <div class="progress-track">
+          <div class="progress-fill" style="width: {{ '%.0f' % (100 * (frac if frac < 1 else 1)) }}%;
+               background: {% if frac > 1 %}var(--neg){% elif frac > 0.8 %}var(--amber){% else %}var(--pos){% endif %};"></div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card chart-card reveal">
+  <h2>Income vs Expenses <span class="h2-meta">Monthly · {{ d.year }}</span></h2>
+  <canvas id="cashflowChart" height="92"></canvas>
+  <div class="legend">
+    <span><i style="background:var(--c-green)"></i> Income</span>
+    <span><i style="background:var(--c-clay)"></i> Expenses</span>
+    <span><i style="background:var(--c-ink)"></i> Net</span>
+  </div>
+</div>
+
+<div class="card table-scroll reveal">
+  <h2>Income</h2>
+  <table class="data-table pivot-table">
+    <thead>
+      <tr><th>Line</th>{% for m in d.months %}<th class="num">{{ m[:3] }}</th>{% endfor %}
+          <th class="num total-col">Year</th><th class="num">% Inc</th></tr>
+    </thead>
+    <tbody>
+      {% for r in d.income_rows %}
+      <tr><td>{{ r.name }}</td>
+        {% for v in r.by_month %}<td class="num mono">{{ money(v) }}</td>{% endfor %}
+        <td class="num mono total-col">{{ money(r.total) }}</td><td></td></tr>
+      {% endfor %}
+      <tr class="total-row"><td>Total Income</td>
+        {% for v in d.income_total %}<td class="num mono">{{ money(v) }}</td>{% endfor %}
+        <td class="num mono total-col">{{ money(d.ytd.income) }}</td><td></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card table-scroll reveal">
+  <h2>Expenses</h2>
+  <table class="data-table pivot-table">
+    <thead>
+      <tr><th>Category</th>{% for m in d.months %}<th class="num">{{ m[:3] }}</th>{% endfor %}
+          <th class="num total-col">Year</th><th class="num">% Inc</th></tr>
+    </thead>
+    <tbody>
+      {% for r in d.expense_rows %}
+      <tr><td>{{ r.name }}</td>
+        {% for v in r.by_month %}<td class="num mono">{{ money(v) }}</td>{% endfor %}
+        <td class="num mono total-col">{{ money(r.total) }}</td>
+        <td class="num mono dim">{{ "{:.1%}".format(r.pct_income) if r.pct_income is not none else "" }}</td></tr>
+      {% endfor %}
+      <tr class="total-row"><td>Total Expenses</td>
+        {% for v in d.expense_total %}<td class="num mono">{{ money(v) }}</td>{% endfor %}
+        <td class="num mono total-col">{{ money(d.ytd.expenses) }}</td>
+        <td class="num mono dim">{{ "{:.1%}".format(d.ytd.expenses / d.ytd.income) if d.ytd.income else "" }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card table-scroll reveal">
+  <h2>Net Income</h2>
+  <table class="data-table pivot-table">
+    <thead>
+      <tr><th></th>{% for m in d.months %}<th class="num">{{ m[:3] }}</th>{% endfor %}
+          <th class="num total-col">Year</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Expenses as % of Income</td>
+        {% for p in d.pct %}<td class="num mono dim">{{ "{:.0%}".format(p) if p is not none else "—" }}</td>{% endfor %}
+        <td class="num mono total-col dim">{{ "{:.1%}".format(d.ytd.expenses / d.ytd.income) if d.ytd.income else "—" }}</td></tr>
+      <tr><td>Net Income</td>
+        {% for v in d.net %}<td class="num mono {% if v < 0 %}negative{% endif %}">{{ money(v) }}</td>{% endfor %}
+        <td class="num mono total-col">{{ money(d.ytd.net) }}</td></tr>
+      <tr><td>Investments</td>
+        {% for v in d.investments %}<td class="num mono">{{ money(v) }}</td>{% endfor %}
+        <td class="num mono total-col">{{ money(d.ytd.investments) }}</td></tr>
+      <tr><td>FCF</td>
+        {% for v in d.fcf %}<td class="num mono {% if v < 0 %}negative{% endif %}">{{ money(v) }}</td>{% endfor %}
+        <td class="num mono total-col">{{ money(d.ytd.fcf) }}</td></tr>
+      <tr class="total-row"><td>Cumulative Net Income</td>
+        {% for v in d.cumulative %}<td class="num mono">{{ money(v, dash_zero=False) }}</td>{% endfor %}
+        <td class="num mono total-col">{{ money(d.ytd.net, dash_zero=False) }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+{% if recurring %}
+<div class="card table-scroll reveal">
+  <h2>Recurring Expenses <span class="h2-meta">detected · ≥3 charges, ~monthly, steady amount ·
+    ${{ "{:,.0f}".format(recurring | sum(attribute='avg_amount')) }}/mo</span></h2>
+  <table class="data-table">
+    <thead><tr><th>Merchant</th><th>Category</th><th class="num">Avg / mo</th>
+      <th class="num">Charges</th><th>Last seen</th></tr></thead>
+    <tbody>
+    {% for r in recurring %}
+      <tr>
+        <td class="desc">{{ r.merchant }}</td>
+        <td>{% if r.category %}<span class="badge">{{ r.category }}</span>{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="num mono">{{ "{:,.2f}".format(r.avg_amount) }}</td>
+        <td class="num mono">{{ r.count }}</td>
+        <td class="mono dim">{{ r.last_date }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <small class="dim">Compare against your declared needed spend on the
+  <a href="{{ url_for('life.index') }}">Life</a> tab.</small>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.addEventListener('load', () => {
+  if (!window.Chart) return;
+  FT.theme();
+  const c = FT.colors();
+  new Chart(document.getElementById('cashflowChart'), {
+    data: {
+      labels: {{ d.months | map('truncate', 3, True, '') | list | tojson }},
+      datasets: [
+        { type: 'bar', label: 'Income',   data: {{ d.income_total | tojson }},  backgroundColor: c.green, borderRadius: 5, maxBarThickness: 16 },
+        { type: 'bar', label: 'Expenses', data: {{ d.expense_total | tojson }}, backgroundColor: c.clay,  borderRadius: 5, maxBarThickness: 16 },
+        { type: 'line', label: 'Net', data: {{ d.net | tojson }}, borderColor: c.ink, borderWidth: 2.5,
+          tension: .35, pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: c.ink },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { grid: { display: false }, border: { display: false } },
+        y: { grid: { color: c.grid }, border: { display: false },
+             ticks: { callback: v => '$' + (v/1000) + 'k' } },
+      },
+      plugins: { tooltip: { callbacks: { label: x => ' ' + x.dataset.label + ': $' + x.raw.toLocaleString() } } },
+    }
+  });
+});
+</script>
+{% endblock %}

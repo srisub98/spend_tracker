@@ -1,0 +1,14 @@
+{
+  "name": "spend-tracker-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "End-to-end (Playwright) tests for the spend tracker Flask app",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

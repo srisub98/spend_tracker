@@ -1,0 +1,3 @@
+# Test/dev dependencies (CI + local). Install with:
+#   .venv/bin/pip install -r requirements-dev.txt
+pytest>=8.0

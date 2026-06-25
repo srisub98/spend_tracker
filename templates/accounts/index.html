@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Accounts — Finance{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Accounts</h1>
+  <span class="sub">{{ accounts | length }} linked · ${{ "{:,.0f}".format(net) }} net</span>
+  <span class="spacer"></span>
+</div>
+
+<div class="two-col">
+  <div class="card reveal">
+    <h2>Your Accounts</h2>
+    {% for a in accounts %}
+      {% set words = a.name.split() %}
+      {% set initials = (words[0][:1] ~ (words[1][:1] if words | length > 1 else words[0][1:2])) | upper %}
+      {% set bal = balances.get(a.id) %}
+      <div class="list-row">
+        <div class="list-ic">{{ initials }}</div>
+        <div class="list-main">
+          <div class="list-name">{{ a.name }}</div>
+          <div class="list-sub">
+            {{ a.type | capitalize }} · {{ (a.asset_class or 'unclassified') | capitalize }}
+            {%- if a.institution %} · {{ a.institution }}{% endif %}
+            {%- if a.external_ref %} · #{{ a.external_ref }}{% endif %}
+            {%- if a.is_liability %} · <span class="badge badge-owed">liability</span>{% endif %}
+            {%- if a.flip_amount_signs %} · <span class="badge">flips signs</span>{% endif %}
+          </div>
+        </div>
+        <div class="mono {% if a.is_liability and bal %}negative{% endif %}" style="font-weight:600">
+          {{ "${:,.0f}".format(bal) if bal is not none else '—' }}</div>
+        <form method="post" action="{{ url_for('accounts.delete', account_id=a.id) }}"
+              onsubmit="return confirm('Delete account? Only possible if it has no transactions.')">
+          <button class="btn-icon" title="Remove">✕</button>
+        </form>
+      </div>
+    {% else %}
+      <p class="empty">No accounts yet. Add one to get started.</p>
+    {% endfor %}
+  </div>
+
+  <div class="card reveal" data-delay=".05">
+    <h2>Add Account</h2>
+    <form method="post" action="{{ url_for('accounts.create') }}">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" name="name" placeholder="e.g. Chase Checking" required>
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select name="type" required>
+          <option value="checking">Checking</option>
+          <option value="savings">Savings</option>
+          <option value="credit">Credit Card</option>
+          <option value="brokerage">Brokerage</option>
+          <option value="loan">Loan</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Institution (optional)</label>
+        <input type="text" name="institution" placeholder="e.g. Chase">
+      </div>
+      <div class="form-group">
+        <label>Asset Class</label>
+        <select name="asset_class">
+          <option value="">— none —</option>
+          <option value="stocks">Stocks</option>
+          <option value="cash">Cash</option>
+          <option value="retirement">Retirement</option>
+          <option value="other">Other</option>
+        </select>
+        <small>Drives the net-worth class rollup.</small>
+      </div>
+      <div class="form-group">
+        <label>Account # (optional, last 4)</label>
+        <input type="text" name="external_ref" placeholder="e.g. 1234">
+        <small>Auto-routes holdings CSVs / statements to this account.</small>
+      </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:500">
+          <input type="checkbox" name="flip_amount_signs" value="1" style="width:auto">
+          Flip amount signs on import
+        </label>
+        <small>Enable if charges import as positive / payments as negative.</small>
+      </div>
+      <button type="submit" class="btn btn-primary">Create Account</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

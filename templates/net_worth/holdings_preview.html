@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Holdings Preview{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Holdings Preview</h1>
+  <a href="{{ url_for('net_worth.index') }}" class="btn btn-ghost">✕ Cancel</a>
+</div>
+
+<p class="dim"><code>{{ filename }}</code> — {{ sections | length }} account section(s).
+<strong>Nothing has been imported yet.</strong> Pick the matching local account for each
+section, choose the snapshot date, and confirm.</p>
+
+<form method="post" action="{{ url_for('net_worth.holdings_confirm') }}">
+  <input type="hidden" name="filename" value="{{ filename }}">
+
+  <div class="card" style="max-width: 420px; margin-bottom: 16px;">
+    <div class="form-group">
+      <label>Snapshot date</label>
+      <input type="date" name="snapshot_date" value="{{ today }}" required>
+      <small>Balances merge into this date's snapshot (created if it doesn't exist).</small>
+    </div>
+  </div>
+
+  {% for s in sections %}
+  <div class="card" style="margin-bottom: 16px;">
+    <h2>{{ s.institution }} — account ref <span class="mono">{{ s.account_ref }}</span></h2>
+    <div class="two-col">
+      <div>
+        <div class="form-group">
+          <label>Import into local account</label>
+          <select name="account_id_{{ loop.index0 }}">
+            <option value="">— skip this section —</option>
+            {% for a in accounts %}
+              <option value="{{ a.id }}" {% if s.matched_account_id == a.id %}selected{% endif %}>
+                {{ a.name }} ({{ a.asset_class or a.type }})</option>
+            {% endfor %}
+          </select>
+          {% if s.matched_account_id %}<small>Matched by saved account number.</small>{% endif %}
+        </div>
+        {% if not s.matched_account_id %}
+        <div class="form-group">
+          <label><input type="checkbox" name="save_ref_{{ loop.index0 }}" value="1" checked>
+            Remember account number for next time</label>
+        </div>
+        {% endif %}
+        <p>
+          Computed total: <strong>${{ "{:,.2f}".format(s.computed_total) }}</strong><br>
+          {% if s.total is not none %}
+            File's own total: ${{ "{:,.2f}".format(s.total) }}
+            {% if (s.total - s.computed_total) | abs > 1 %}
+              <span class="negative">⚠ differs by ${{ "{:,.2f}".format(s.total - s.computed_total) }}</span>
+            {% else %}<span class="positive">✓ matches</span>{% endif %}
+          {% endif %}
+        </p>
+      </div>
+      <div style="max-height: 260px; overflow-y: auto;">
+        <table class="data-table">
+          <thead><tr><th>Symbol</th><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Value</th></tr></thead>
+          <tbody>
+          {% for p in s.positions %}
+            <tr>
+              <td class="mono">{{ p.symbol or 'CASH' }}</td>
+              <td class="desc">{{ p.description }}</td>
+              <td class="num mono">{{ "{:,.3f}".format(p.quantity) if p.quantity is not none else '—' }}</td>
+              <td class="num mono">{{ "{:,.2f}".format(p.price) if p.price is not none else '—' }}</td>
+              <td class="num mono">{{ "{:,.2f}".format(p.market_value) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <button type="submit" class="btn btn-primary">✓ Import into snapshot</button>
+</form>
+{% endblock %}

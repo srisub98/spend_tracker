@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Investments — Finance{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Investments</h1>
+  {% if holdings_date %}<span class="sub">positions as of {{ holdings_date }}</span>{% endif %}
+  <span class="spacer"></span>
+  <a href="{{ url_for('investments.activity') }}" class="btn">Activity / Ledger →</a>
+</div>
+
+{% if nw_total %}
+<div class="card reveal" style="margin-bottom:16px;">
+  <h2>30,000 ft <span class="h2-meta">entire net worth by class, incl. manual accounts</span></h2>
+  <div class="alloc-bar" style="margin:8px 0;">
+    {% set colors = {'stocks':'var(--c-ink)','cash':'var(--c-green)','retirement':'var(--c-slate)','other':'var(--c-amber)'} %}
+    {% for c in class_order %}
+      {% if alloc_class[c] > 0 %}
+      <div style="width: {{ '%.2f' % (100 * alloc_class[c] / nw_total) }}%; background: {{ colors[c] }};"
+           title="{{ c }}: ${{ '{:,.0f}'.format(alloc_class[c]) }}"></div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  <p class="dim">
+    {% for c in class_order %}{% if alloc_class[c] > 0 %}
+      <span style="color: {{ colors[c] }}">●</span> {{ c }}
+      {{ "{:.0%}".format(alloc_class[c] / nw_total) }} (${{ "{:,.0f}".format(alloc_class[c]) }}) &nbsp;
+    {% endif %}{% endfor %}
+    — total ${{ "{:,.0f}".format(nw_total) }} incl. manual accounts (401k, CDs…)
+  </p>
+  <details>
+    <summary class="dim">by account</summary>
+    <table class="data-table" style="margin-top:8px;">
+      {% for a in alloc_accounts %}
+      <tr><td>{{ a.name }}</td><td class="dim">{{ a.cls }}</td>
+          <td class="num mono">{{ "{:,.0f}".format(a.value) }}</td>
+          <td class="num mono dim">{{ "{:.1%}".format(a.value / nw_total) }}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+</div>
+{% endif %}
+
+{% for c in critic_checks %}
+<div class="flash {% if c.level == 'warn' %}flash-error{% endif %}" style="margin-bottom:8px;">
+  {% if c.level == 'warn' %}⚠{% else %}💡{% endif %} <strong>{{ c.title }}</strong><br>
+  <small>{{ c.body }}</small>
+</div>
+{% endfor %}
+
+{% if income %}
+<div class="card" style="margin-bottom:16px;">
+  <h2>Investment Income {{ vest_year }} <small class="dim">(from the ledger — import each
+  month's Vanguard statement to keep it complete)</small></h2>
+  <p>
+    Dividends <strong>${{ "{:,.2f}".format(income.get('dividend', 0)) }}</strong> ·
+    Capital gains <strong>${{ "{:,.2f}".format(income.get('capgain_st', 0) + income.get('capgain_lt', 0)) }}</strong> ·
+    Interest <strong>${{ "{:,.2f}".format(income.get('interest', 0)) }}</strong>
+    — taxable even when reinvested.
+  </p>
+</div>
+{% endif %}
+
+{% if not holdings_date %}
+  <p class="empty">No holdings yet — upload a Schwab/Vanguard positions CSV on the
+  <a href="{{ url_for('net_worth.index') }}">Net Worth</a> page.</p>
+{% else %}
+
+<div class="stat-grid">
+  <div class="stat-card is-hero reveal">
+    <div class="stat-label">Holdings Total</div>
+    <div class="stat-value" data-count="{{ '%.0f' % total }}" data-prefix="$">${{ "{:,.0f}".format(total) }}</div>
+    <div class="stat-foot">
+      {% if gain_pct is not none %}
+      <span class="trend {% if gain_total >= 0 %}trend-up{% else %}trend-down{% endif %}">
+        <span class="arrow">{% if gain_total >= 0 %}▲{% else %}▼{% endif %}</span> {{ "{:.1%}".format(gain_pct | abs) }}</span>
+      {% endif %}
+      <span class="stat-note">across all brokerage accounts</span>
+    </div>
+  </div>
+  <div class="stat-card reveal" data-delay=".05">
+    <div class="stat-label">Invested</div>
+    <div class="stat-value" data-count="{{ '%.0f' % invested }}" data-prefix="$">${{ "{:,.0f}".format(invested) }}</div>
+  </div>
+  <div class="stat-card reveal" data-delay=".1">
+    <div class="stat-label">Cash & Money Market</div>
+    <div class="stat-value" data-count="{{ '%.0f' % cash }}" data-prefix="$">${{ "{:,.0f}".format(cash) }}</div>
+  </div>
+  <div class="stat-card reveal" data-delay=".15">
+    <div class="stat-label">Unrealized Gain <span class="dim">(where basis known)</span></div>
+    <div class="stat-value {% if gain_total >= 0 %}positive{% else %}negative{% endif %}">
+      {{ "{:+,.0f}".format(gain_total) }}
+      {% if gain_pct is not none %}<small>({{ "{:+.1%}".format(gain_pct) }})</small>{% endif %}
+    </div>
+  </div>
+  {% if top %}
+  <div class="stat-card reveal" data-delay=".2">
+    <div class="stat-label">Largest Position</div>
+    <div class="stat-value {% if top.value / invested > 0.25 %}negative{% endif %}">
+      {{ top.symbol }} {{ "{:.0%}".format(top.value / invested) }}</div>
+  </div>
+  {% endif %}
+</div>
+
+{% if top and top.value / invested > 0.25 %}
+<div class="flash flash-error">
+  ⚠ Concentration: {{ top.symbol }} is {{ "{:.0%}".format(top.value / invested) }} of your
+  invested holdings{% if top.symbol == 'META' %} — and it's also your employer{% endif %}.
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom: 16px;">
+  <h2>RSU Vests</h2>
+  <p>
+    <strong>${{ "{:,.0f}".format(vest_ytd) }}</strong> vested (post-tax) in {{ vest_year }} so far
+    {% if meta %} · currently holding <strong>{{ "{:,.0f}".format(meta.quantity) }} META</strong>
+      (${{ "{:,.0f}".format(meta.value) }}{% if meta.cost_basis and not meta.basis_incomplete %},
+      {{ "{:+.1%}".format((meta.value - meta.cost_basis) / meta.cost_basis) }} vs vest-price basis{% endif %})
+    {% endif %}
+  </p>
+  <form method="post" action="{{ url_for('net_worth.log_vest') }}"
+        style="display:flex; gap:8px; flex-wrap:wrap; align-items:end; margin-bottom:10px;">
+    <label>Vest date<br><input type="date" name="vest_date" value="{{ today }}" required></label>
+    <label>Post-tax $<br><input type="number" name="amount" step="0.01" min="0.01"
+           placeholder="e.g. 11900" style="width:110px" required></label>
+    <label>Shares (opt.)<br><input type="text" name="shares" placeholder="e.g. 17" style="width:80px"></label>
+    <label>Symbol<br><input type="text" name="symbol" value="META" style="width:80px"></label>
+    <label>Account<br>
+      <select name="account_id">
+        {% for a in accounts %}
+          <option value="{{ a.id }}" {% if a.id == vest_account_id %}selected{% endif %}>{{ a.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn btn-primary">Log vest</button>
+  </form>
+  <small class="dim">Vests never appear in checking/card CSVs (shares land at Schwab), so log
+  each one here — it's saved as an <em>RSU Vest</em> income transaction and flows into that
+  month's income, net income, and FCF on the dashboard. Use the post-tax cash value (your
+  sheet's "Post Tax RSU Vest" number). The unvested schedule lives in Schwab's Equity Award
+  Center, which has no API — check Workday/EAC for upcoming vests.</small>
+
+  {% if vests %}
+  <table class="data-table" style="margin-top:12px;">
+    <thead><tr><th>Date / Month</th><th>Description</th><th class="num">Post-tax $</th><th>Source</th></tr></thead>
+    <tbody>
+    {% for v in vests | reverse %}
+      <tr>
+        <td class="mono">{{ v.date }}</td>
+        <td>{{ v.description }}</td>
+        <td class="num mono">{{ "{:,.0f}".format(v.amount) }}</td>
+        <td class="dim">{{ v.source }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+{% for g in groups %}
+<div class="card table-scroll" style="margin-bottom: 16px;">
+  <h2>{{ {"equity":"Stocks","etf":"ETFs","mutual_fund":"Mutual Funds","cash":"Cash & Money Market","other":"Other","unclassified":"Unclassified"}[g.type] }}
+      — ${{ "{:,.0f}".format(g.value) }}</h2>
+  <table class="data-table pivot-table">
+    <thead><tr>
+      <th>Symbol</th><th>Description</th><th class="num">Qty</th><th class="num">Value</th>
+      <th class="num">% Invested</th><th class="num">Cost Basis</th><th class="num">Gain $</th>
+      <th class="num">Gain %</th><th>Accounts</th><th>Class</th>
+    </tr></thead>
+    <tbody>
+    {% for r in g.rows %}
+      <tr>
+        <td class="mono"><strong>{{ r.symbol }}</strong></td>
+        <td class="desc">{{ r.description }}</td>
+        <td class="num mono">{{ "{:,.3f}".format(r.quantity) if r.quantity is not none else '—' }}</td>
+        <td class="num mono">{{ "{:,.0f}".format(r.value) }}</td>
+        <td class="num mono">{{ "{:.1%}".format(r.pct) if r.pct is not none else '' }}</td>
+        <td class="num mono">{{ "{:,.0f}".format(r.cost_basis) if r.gain is not none else '—' }}</td>
+        <td class="num mono {% if r.gain is not none and r.gain < 0 %}negative{% elif r.gain is not none %}positive{% endif %}">
+          {{ "{:+,.0f}".format(r.gain) if r.gain is not none else '' }}</td>
+        <td class="num mono {% if r.gain_pct is not none and r.gain_pct < 0 %}negative{% elif r.gain_pct is not none %}positive{% endif %}">
+          {{ "{:+.1%}".format(r.gain_pct) if r.gain_pct is not none else '' }}</td>
+        <td class="dim">{{ r.accounts }}</td>
+        <td>
+          {% if r.symbol == 'CASH' %}<span class="dim">cash</span>{% else %}
+          <select class="class-select" data-symbol="{{ r.symbol }}"
+                  title="{% if r.overridden %}manual override — pick the blank row to reset{% else %}from the file/API; pick a class to override{% endif %}">
+            {% if r.overridden %}<option value="">(reset)</option>
+            {% elif not r.asset_type %}<option value="" selected>—</option>{% endif %}
+            {% for t in asset_types %}
+              <option value="{{ t }}" {% if t == r.asset_type %}selected{% endif %}>
+                {{ t.replace('_',' ') }}{% if t == r.asset_type and r.overridden %} ✎{% endif %}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.class-select').forEach(sel => {
+  sel.addEventListener('change', async () => {
+    const body = new URLSearchParams({symbol: sel.dataset.symbol, asset_type: sel.value});
+    const resp = await fetch("{{ url_for('net_worth.classify_holding') }}",
+                             {method: 'POST', body});
+    if (resp.ok) location.reload();
+    else alert('Failed to save classification');
+  });
+});
+</script>
+{% endblock %}

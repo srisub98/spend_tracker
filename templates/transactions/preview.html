@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Import Preview{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Import Preview — {{ account.name }}</h1>
+  <a href="{{ url_for('transactions.upload') }}" class="btn btn-ghost">✕ Cancel</a>
+</div>
+
+{% if error %}
+  <div class="flash flash-error">
+    Couldn't parse <code>{{ filename }}</code>: {{ error }}<br>
+    Map the columns below and hit <strong>Re-preview</strong>.
+  </div>
+{% else %}
+  <p class="dim">
+    <code>{{ filename }}</code> — {{ stats.total }} rows parsed
+    ({{ stats.rule_matched }} matched by rules, {{ stats.unmatched }} uncategorized,
+    {{ stats.skipped }} unparseable rows skipped).
+    <strong>Nothing has been imported yet.</strong> Check the signs: spending should be
+    negative (red), payments/income positive (green).
+  </p>
+{% endif %}
+
+<div class="two-col">
+  <!-- Column mapping + confirm -->
+  <div class="card">
+    <h2>Column Mapping</h2>
+    <form method="post" action="{{ url_for('transactions.upload') }}" id="remap-form">
+      <input type="hidden" name="account_id" value="{{ account.id }}">
+      <input type="hidden" name="filename" value="{{ filename }}">
+      {% for key in mapping_keys %}
+        <div class="form-group">
+          <label>{{ {"date":"Date","desc":"Description","amount":"Amount (single column)",
+                     "debit":"Debit (charges column)","credit":"Credit (payments column)",
+                     "type":"Type (Credit/Debit indicator column)"}[key] }}</label>
+          <select name="map_{{ key }}">
+            <option value="">— auto / none —</option>
+            {% for h in stats.headers %}
+              <option value="{{ h }}" {% if stats.columns.get(key) == h %}selected{% endif %}>{{ h }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endfor %}
+      <div class="form-group">
+        <label>
+          <input type="checkbox" name="flip" value="1" {% if flip %}checked{% endif %}>
+          Flip amount signs
+        </label>
+        <small>Use when charges show green/positive in the sample.</small>
+      </div>
+      <button type="submit" class="btn">↻ Re-preview</button>
+    </form>
+
+    {% if not error %}
+    <hr style="margin: 16px 0; border: none; border-top: 1px solid #eee;">
+    <form method="post" action="{{ url_for('transactions.upload_confirm') }}">
+      <input type="hidden" name="account_id" value="{{ account.id }}">
+      <input type="hidden" name="filename" value="{{ filename }}">
+      {% for key in mapping_keys %}
+        <input type="hidden" name="map_{{ key }}" value="{{ stats.columns.get(key) or '' }}">
+      {% endfor %}
+      {% if flip %}<input type="hidden" name="flip" value="1">{% endif %}
+      <div class="form-group">
+        <label>
+          <input type="checkbox" name="save_mapping" value="1" checked>
+          Remember these settings for {{ account.name }}
+        </label>
+        <small>Future uploads for this account will parse the same way automatically.</small>
+      </div>
+      <button type="submit" class="btn btn-primary">✓ Looks right — import {{ stats.total }} transactions</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <!-- Sample rows -->
+  <div class="card">
+    <h2>Sample ({{ sample | length }} of {{ stats.total }})</h2>
+    {% if sample %}
+    <table class="data-table">
+      <thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Category</th></tr></thead>
+      <tbody>
+      {% for r in sample %}
+        <tr>
+          <td class="mono">{{ r.date }}</td>
+          <td class="desc">{{ r.description }}</td>
+          <td class="num mono {% if r.amount < 0 %}negative{% else %}positive{% endif %}">
+            {{ "{:+,.2f}".format(r.amount) }}</td>
+          <td>{% if r.category %}<span class="badge">{{ r.category }}</span>{% else %}<span class="dim">?</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="empty">No rows parsed — fix the column mapping on the left.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
