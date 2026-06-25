@@ -188,7 +188,18 @@ Tracks each financial account (checking, savings, credit card, brokerage, loan).
 | external_ref | TEXT | institution account # (last 4) — routes holdings CSVs |
 | flip_amount_signs | INTEGER | 1 = negate amounts on CSV import (issuer sign conventions) |
 | csv_mapping | TEXT | JSON column mapping saved from import preview (per-bank CSV formats) |
+| plaid_account_id | TEXT | Plaid account this row syncs from (NULL = CSV-only) |
+| plaid_item_id | TEXT | owning `plaid_items.item_id` |
 | created_at | TEXT | ISO8601 |
+
+> **Plaid sync (optional).** With `PLAID_*` set in `.env`, the Accounts page can link a
+> bank (`plaid_items` table holds the access_token + `/transactions/sync` cursor) and
+> auto-pull transactions through the same rules → Claude → review pipeline as CSVs.
+> `transactions.plaid_transaction_id` makes re-syncs idempotent, and
+> `models.transaction.insert_plaid_rows()` skips any Plaid txn already imported from a
+> CSV (matched on amount + date ±3d, since Plaid's clean merchant name won't byte-match a
+> raw memo). Everything is gated behind `services/plaid_api.configured()` — unset = no
+> Plaid surface, app is CSV-only. See `services/plaid_api.py`, `routes/plaid.py`.
 
 ### `categories`
 Canonical category registry (replaces the old `config.CATEGORIES` constant). Seeded from
@@ -211,21 +222,22 @@ Brokerage positions attached to a net-worth snapshot (filled by holdings CSV imp
 PRD Phase 4): `snapshot_id`, `account_id`, `symbol`, `quantity`, `price`, `market_value`.
 
 ### `transactions`
-One row per transaction imported from CSV.
+One row per transaction, imported from CSV or synced via Plaid.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | INTEGER PK | |
 | account_id | INTEGER FK | → accounts |
 | date | TEXT | YYYY-MM-DD |
-| description | TEXT | raw payee/memo from CSV |
+| description | TEXT | raw payee/memo from CSV, or Plaid's merchant name |
 | amount | REAL | positive = money in, negative = money out |
 | currency | TEXT | default USD |
 | category | TEXT | assigned by rules, Claude, or user |
 | category_source | TEXT | 'rule' / 'claude' / 'user' / NULL |
 | notes | TEXT | user-added notes |
-| raw_csv_row | TEXT | JSON of original CSV row (audit trail) |
+| raw_csv_row | TEXT | JSON of original CSV row (audit trail) — NULL for pure-Plaid rows |
 | import_batch_id | TEXT | UUID per upload session |
+| plaid_transaction_id | TEXT | Plaid's stable id — set on Plaid-origin rows, or adopted onto a matching CSV row by `insert_plaid_rows()` (see `accounts` note above) |
 | created_at | TEXT | ISO8601 |
 
 **UNIQUE constraint:** `(account_id, date, description, amount)` — re-uploading the same CSV is safe.
@@ -339,6 +351,15 @@ Category source is set to `'claude'`.
 | POST | /accounts/\<id\>/edit | Update account |
 | POST | /accounts/\<id\>/delete | Delete (only if no transactions) |
 
+### Plaid (optional — all routes 404 unless `services/plaid_api.configured()`)
+| Method | Path | Purpose |
+|---|---|---|
+| POST | /plaid/link-token | JSON link_token for the browser Plaid Link flow |
+| POST | /plaid/exchange | Exchange public_token → store Item + auto-create/link accounts |
+| POST | /plaid/sandbox-link | Sandbox-only: link a fake bank with no Link UI (testing) |
+| POST | /plaid/sync | Cursor sync all Items → dedup-aware insert → Claude → flash summary |
+| POST | /plaid/\<item_id\>/unlink | Soft-unlink an Item (keeps synced transactions) |
+
 ### Net Worth
 | Method | Path | Purpose |
 |---|---|---|
@@ -396,3 +417,6 @@ Category source is set to `'claude'`.
 - **pandas only in services** — not imported in models or routes; keeps mental model clean
 - **Single `python3 app.py` command** — no migration step; categories/rules seed automatically on first init
 - **No auth** — local only, localhost, single user
+- **Plaid sync mirrors the Schwab integration pattern** — a single `configured()` predicate
+  gates both the routes (404 if unset) and the template UI, so an external API integration
+  is always strictly additive: unset env vars reproduce yesterday's app exactly

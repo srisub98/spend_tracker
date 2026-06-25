@@ -1,5 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 import models.account as account_model
+import config
+from services import plaid_api
 
 bp = Blueprint("accounts", __name__, url_prefix="/accounts")
 
@@ -11,8 +13,12 @@ def index():
     balances = nw_model.get_latest_balances()
     net = sum(-b if a["is_liability"] else b
               for a in accounts for b in [balances.get(a["id"])] if b is not None)
+    plaid_on = plaid_api.configured()
     return render_template("accounts/index.html", accounts=accounts,
-                           balances=balances, net=net)
+                           balances=balances, net=net,
+                           plaid_configured=plaid_on,
+                           plaid_items=plaid_api.status() if plaid_on else [],
+                           plaid_env=config.PLAID_ENV)
 
 
 def _optional_fields(form):

@@ -74,6 +74,113 @@ def bulk_insert(rows):
     db.commit()
     return inserted
 
+def insert_plaid_rows(rows, date_tolerance_days=3):
+    """Insert Plaid-synced transactions without ever duplicating an existing row.
+
+    rows: dicts shaped like csv_parser output, plus a required 'plaid_transaction_id'.
+    Three-layer dedup (see plan Hard Requirement 2):
+      1. Same plaid_transaction_id already stored → UPDATE in place (handles Plaid
+         'modified' events like pending→posted) and keep any category already set.
+         If the row originated from a CSV import (it merely *adopted* this id via
+         layer 2 on an earlier sync), its date/description/amount are the real raw
+         memo/audit-trail — never overwritten, only pure-Plaid-origin rows refresh.
+      2. A non-Plaid row (e.g. a CSV import) for the same purchase already exists —
+         matched on account + amount + a small date window, IGNORING description
+         (Plaid's "Starbucks" never byte-matches a raw "STARBUCKS #1234" memo). Adopt
+         the plaid_transaction_id onto that row so future syncs are idempotent, and
+         don't insert a duplicate.
+      3. Genuinely new → INSERT with the rule-assigned category.
+
+    Returns {'inserted', 'updated', 'skipped'} (skipped = matched an existing CSV row).
+    """
+    db = get_db()
+    inserted = updated = skipped = 0
+    for row in rows:
+        ptid = row["plaid_transaction_id"]
+        amount = round(row["amount"], 2)
+
+        existing = db.execute(
+            "SELECT id, raw_csv_row FROM transactions WHERE plaid_transaction_id=?", (ptid,)
+        ).fetchone()
+        if existing:
+            if existing["raw_csv_row"] is None:
+                db.execute(
+                    "UPDATE transactions SET date=?, description=?, amount=? WHERE id=?",
+                    (row["date"], row["description"], amount, existing["id"]),
+                )
+            updated += 1
+            continue
+
+        # Cross-source dedup. 0.005 tolerance absorbs float representation; the date
+        # window absorbs posting lag. Identical-amount transactions a couple days
+        # apart can in theory collapse into one — accepted tradeoff for "never
+        # re-import what a CSV already brought in".
+        dupe = db.execute(
+            """SELECT id FROM transactions
+               WHERE account_id=? AND plaid_transaction_id IS NULL
+                 AND ABS(amount - ?) < 0.005
+                 AND ABS(julianday(date) - julianday(?)) <= ?
+               LIMIT 1""",
+            (row["account_id"], amount, row["date"], date_tolerance_days),
+        ).fetchone()
+        if dupe:
+            db.execute("UPDATE transactions SET plaid_transaction_id=? WHERE id=?",
+                       (ptid, dupe["id"]))
+            skipped += 1
+            continue
+
+        cur = db.execute(
+            """INSERT OR IGNORE INTO transactions
+               (account_id, date, description, amount, currency, category,
+                category_source, import_batch_id, plaid_transaction_id)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (row["account_id"], row["date"], row["description"], amount,
+             row.get("currency", "USD"), row.get("category"), row.get("category_source"),
+             row.get("import_batch_id"), ptid),
+        )
+        inserted += cur.rowcount
+    db.commit()
+    return {"inserted": inserted, "updated": updated, "skipped": skipped}
+
+
+def remove_plaid_rows(plaid_transaction_ids):
+    """Apply Plaid 'removed' events. Pure Plaid-origin rows (no raw_csv_row) are
+    deleted; a CSV row that merely adopted the id is kept (it's real history) and
+    just unlinked. Returns the number of rows deleted."""
+    if not plaid_transaction_ids:
+        return 0
+    db = get_db()
+    removed = 0
+    for ptid in plaid_transaction_ids:
+        victim = db.execute(
+            "SELECT id FROM transactions WHERE plaid_transaction_id=? AND raw_csv_row IS NULL",
+            (ptid,),
+        ).fetchone()
+        if victim:
+            db.execute("UPDATE outing_line_items SET transaction_id=NULL WHERE transaction_id=?",
+                       (victim["id"],))
+            db.execute("DELETE FROM transactions WHERE id=?", (victim["id"],))
+            removed += 1
+        else:
+            db.execute("UPDATE transactions SET plaid_transaction_id=NULL WHERE plaid_transaction_id=?",
+                       (ptid,))
+    db.commit()
+    return removed
+
+
+def get_uncategorized_plaid_ids(plaid_transaction_ids):
+    """Freshly synced rows (by plaid_transaction_id) that no rule matched — the
+    Plaid analogue of get_uncategorized_by_batch, for handing off to Claude."""
+    if not plaid_transaction_ids:
+        return []
+    placeholders = ",".join("?" * len(plaid_transaction_ids))
+    return get_db().execute(
+        f"SELECT id, description, category FROM transactions "
+        f"WHERE plaid_transaction_id IN ({placeholders}) AND category IS NULL ORDER BY id",
+        list(plaid_transaction_ids),
+    ).fetchall()
+
+
 def get_descriptions(ids):
     if not ids:
         return []

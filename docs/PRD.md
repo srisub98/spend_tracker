@@ -331,7 +331,10 @@ came out of it (now in csv_parser.py):
 > Decision history: Plaid was considered and **rejected the same day** (Sri: no paid
 > services — Plaid's free Development env is gone, Investments is a paid product).
 > CSVs are the primary path; files stay local in `data/uploads/`. For direct pulls,
-> see Phase 4b (free Schwab official API).
+> see Phase 4b (free Schwab official API). **Revisited 2026-06-25:** Plaid introduced a
+> free Trial plan (10 real-bank Items, no cost) that reverses the cost objection for
+> *transaction sync* specifically — see Phase 7. Holdings/net worth still go through
+> Schwab's API; this doesn't change Phase 4a/4b.
 
 - [x] `services/holdings_parser.py`: format autodetection + parsers for
   **Schwab Positions export** (multi-account sections, "Cash & Cash Investments" → symbol
@@ -451,12 +454,41 @@ month (≥ LIVE_START_MONTH) was missing from income/net income/FCF entirely.
   paychecks = double concentration), allocation drift vs a target, fund overlap (VTI vs
   VTSAX both = US total market), cash drag, expense-ratio audit. Could be rule-based first,
   Claude-powered commentary later. Needs fresh holdings → motivates Phase 4b.
-- Aggregators if free options die: SimpleFIN Bridge (~$50/mo). Plaid rejected (cost).
+- Aggregators if free options die: SimpleFIN Bridge (~$50/mo). Plaid was rejected for
+  *transactions* on cost grounds (2026-06-09) — reversed 2026-06-25 once Plaid's free
+  Trial plan made real-bank transaction sync free up to 10 Items; see Phase 7.
 - iCloud-folder HTML export for phone viewing (set `OUTPUT_FOLDER` to an iCloud Drive path).
+
+### Phase 7 — Plaid bank sync (optional) — ✅ DONE 2026-06-25
+
+> Revisits the Phase 4a/Phase 6 rejection above: Plaid's 2026-04-15 Trial plan gives
+> free real-bank data for up to 10 linked Items (vs. the old paid-only Development env),
+> so for a single-user app this fits the "no paid services" constraint after all. Scoped
+> to **transactions only** — Schwab's official API remains the path for brokerage
+> holdings/net worth (Phase 4b), since Plaid Investments is still a paid product.
+
+- [x] `services/plaid_api.py` (mirrors `services/schwab_api.py`): `configured()` gate,
+  Plaid Link token creation/exchange, cursor-based `/transactions/sync`, account
+  auto-linking by last-4 mask (same idea as the holdings-CSV account matching).
+- [x] `plaid_items` table (access_token, cursor, status) + `accounts.plaid_account_id` /
+  `plaid_item_id` + `transactions.plaid_transaction_id`, all additive migrations.
+- [x] **Optional by construction:** a single `plaid_api.configured()` check 404s every
+  `/plaid/*` route and hides the UI; with `PLAID_*` unset the app is byte-for-byte the
+  CSV-only app from before this phase.
+- [x] **Dedup, three layers** (`models/transaction.insert_plaid_rows`): (1) exact
+  `plaid_transaction_id` match → update in place, so re-syncs and pending→posted
+  transitions are idempotent; pure-Plaid rows refresh, but a row that *adopted* an id
+  from a CSV import keeps its original raw fields forever (audit trail); (2) no id match
+  but same account + amount + date within ±3 days → adopt the id onto the existing CSV
+  row instead of inserting a duplicate (Plaid's clean merchant name never byte-matches a
+  raw CSV memo, so description can't be the dedup key here); (3) otherwise, genuinely
+  new → insert. Verified in `tests/python/test_plaid.py`.
+- [x] Synced rows run through the same `apply_rules()` → Claude → review pipeline as a
+  CSV import (`routes/plaid.py sync()` mirrors `transactions.upload_confirm()`).
 
 ---
 
-## 7. Decisions log
+## 8. Decisions log
 
 | Decision | Rationale |
 |---|---|
@@ -466,3 +498,4 @@ month (≥ LIVE_START_MONTH) was missing from income/net income/FCF entirely.
 | Rules in DB, not code | User asked for an editable "registry"; seed from existing rules.py |
 | Snapshots (not holdings) remain the NW source of truth | Mixed manual + CSV accounts; holdings are enrichment attached to snapshots |
 | Wipe DB instead of migrations | DB has only test data (verified 2026-06-09) |
+| Plaid added for transaction sync, transactions-only (2026-06-25) | Original 2026-06-09 rejection was cost-based (paid-only Items); Plaid's new Trial plan (free, 10 real Items) reverses that for this single-user app. Holdings/net worth stay on Schwab's free API — Plaid Investments is still paid |

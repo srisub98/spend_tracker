@@ -53,6 +53,10 @@ def _migrate(db):
                   "transaction_id INTEGER REFERENCES transactions(id)")
     ensure_column("outing_participants", "person_id",
                   "person_id INTEGER REFERENCES people(id)")
+    # Plaid sync (optional): account linkage + per-transaction id for idempotent re-sync
+    ensure_column("accounts", "plaid_account_id", "plaid_account_id TEXT")
+    ensure_column("accounts", "plaid_item_id", "plaid_item_id TEXT")
+    ensure_column("transactions", "plaid_transaction_id", "plaid_transaction_id TEXT")
 
 
 def _seed(db):
