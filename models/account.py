@@ -12,17 +12,36 @@ def get_by_id(account_id):
     ).fetchone()
 
 def create(name, type_, institution, currency="USD", is_liability=0,
-           asset_class=None, external_ref=None, flip_amount_signs=0):
+           asset_class=None, external_ref=None, flip_amount_signs=0,
+           plaid_account_id=None, plaid_item_id=None):
     db = get_db()
     cur = db.execute(
         """INSERT INTO accounts (name, type, institution, currency, is_liability,
-                                 asset_class, external_ref, flip_amount_signs)
-           VALUES (?,?,?,?,?,?,?,?)""",
+                                 asset_class, external_ref, flip_amount_signs,
+                                 plaid_account_id, plaid_item_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
         (name, type_, institution, currency, is_liability,
-         asset_class, external_ref, flip_amount_signs),
+         asset_class, external_ref, flip_amount_signs,
+         plaid_account_id, plaid_item_id),
     )
     db.commit()
     return cur.lastrowid
+
+
+def get_by_plaid_account_id(plaid_account_id):
+    return get_db().execute(
+        "SELECT * FROM accounts WHERE plaid_account_id=?", (plaid_account_id,)
+    ).fetchone()
+
+
+def link_plaid(account_id, plaid_account_id, plaid_item_id):
+    """Attach an existing local account to a Plaid account (e.g. matched by last-4)."""
+    db = get_db()
+    db.execute(
+        "UPDATE accounts SET plaid_account_id=?, plaid_item_id=? WHERE id=?",
+        (plaid_account_id, plaid_item_id, account_id),
+    )
+    db.commit()
 
 def update(account_id, name, type_, institution,
            asset_class=None, external_ref=None, flip_amount_signs=0):

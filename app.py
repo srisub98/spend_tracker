@@ -2,7 +2,7 @@ import os
 from flask import Flask, redirect, url_for
 from database.db import init_db
 from routes import (transactions, accounts, net_worth, bill_splits, exports,
-                    dashboard, rules, life, investments, insights)
+                    dashboard, rules, life, investments, insights, plaid)
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -12,6 +12,7 @@ app.register_blueprint(transactions.bp)
 app.register_blueprint(rules.bp)
 app.register_blueprint(life.bp)
 app.register_blueprint(accounts.bp)
+app.register_blueprint(plaid.bp)
 app.register_blueprint(net_worth.bp)
 app.register_blueprint(investments.bp)
 app.register_blueprint(insights.bp)

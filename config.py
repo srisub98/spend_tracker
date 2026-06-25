@@ -18,6 +18,14 @@ SCHWAB_APP_KEY = os.getenv("SCHWAB_APP_KEY", "")
 SCHWAB_APP_SECRET = os.getenv("SCHWAB_APP_SECRET", "")
 SCHWAB_CALLBACK_URL = os.getenv("SCHWAB_CALLBACK_URL", "https://127.0.0.1")
 
+# Plaid (optional bank/credit transaction sync). All Plaid UI/routes are gated behind
+# services/plaid_api.configured() — with these unset the app behaves exactly as before
+# and only CSV upload is available. Sandbox is free forever (fake data); the Trial plan
+# (teams created on/after 2026-04-15) gives 10 real Items free.
+PLAID_CLIENT_ID = os.getenv("PLAID_CLIENT_ID", "")
+PLAID_SECRET = os.getenv("PLAID_SECRET", "")
+PLAID_ENV = os.getenv("PLAID_ENV", "sandbox")  # sandbox | production
+
 # Hard cutover between bootstrapped sheet history and live transaction data (PRD §5).
 # Months < LIVE_START_MONTH read from monthly_summaries; months >= read from transactions.
 LIVE_START_MONTH = os.getenv("LIVE_START_MONTH", "2026-06")

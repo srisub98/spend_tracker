@@ -14,6 +14,10 @@ CREATE TABLE IF NOT EXISTS accounts (
     -- JSON column mapping for this bank's CSV format, saved from the import preview:
     -- {"date": "...", "desc": "...", "amount": "...", "debit": "...", "credit": "..."}
     csv_mapping TEXT,
+    -- Plaid linkage (optional): the Plaid account_id this local account syncs from,
+    -- and the owning plaid_items.item_id. NULL for CSV-only accounts.
+    plaid_account_id TEXT,
+    plaid_item_id    TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -29,6 +33,9 @@ CREATE TABLE IF NOT EXISTS transactions (
     notes           TEXT,
     raw_csv_row     TEXT,
     import_batch_id TEXT,
+    -- Plaid's stable transaction_id (NULL for CSV rows). Makes re-syncs idempotent and
+    -- lets us apply Plaid 'modified'/'removed' updates by id rather than re-inserting.
+    plaid_transaction_id TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(account_id, date, description, amount)
 );
@@ -155,6 +162,19 @@ CREATE TABLE IF NOT EXISTS schwab_tokens (
     access_expires_at  TEXT,    -- ISO8601; access tokens live ~30 min
     refresh_expires_at TEXT,    -- ISO8601; refresh tokens live 7 days → weekly re-login
     updated_at         TEXT
+);
+
+-- Plaid Items (one per linked institution login). Local DB only — gitignored.
+-- access_token is a bearer secret; cursor drives incremental /transactions/sync.
+CREATE TABLE IF NOT EXISTS plaid_items (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id       TEXT UNIQUE NOT NULL,
+    access_token  TEXT NOT NULL,
+    institution   TEXT,
+    cursor        TEXT,                  -- /transactions/sync cursor (NULL = full sync)
+    status        TEXT NOT NULL DEFAULT 'active',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT
 );
 
 -- "Life tab": declared fixed/needed monthly spend (rent, insurance, internet, ...).

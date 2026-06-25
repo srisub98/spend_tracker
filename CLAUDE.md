@@ -188,7 +188,18 @@ Tracks each financial account (checking, savings, credit card, brokerage, loan).
 | external_ref | TEXT | institution account # (last 4) — routes holdings CSVs |
 | flip_amount_signs | INTEGER | 1 = negate amounts on CSV import (issuer sign conventions) |
 | csv_mapping | TEXT | JSON column mapping saved from import preview (per-bank CSV formats) |
+| plaid_account_id | TEXT | Plaid account this row syncs from (NULL = CSV-only) |
+| plaid_item_id | TEXT | owning `plaid_items.item_id` |
 | created_at | TEXT | ISO8601 |
+
+> **Plaid sync (optional).** With `PLAID_*` set in `.env`, the Accounts page can link a
+> bank (`plaid_items` table holds the access_token + `/transactions/sync` cursor) and
+> auto-pull transactions through the same rules → Claude → review pipeline as CSVs.
+> `transactions.plaid_transaction_id` makes re-syncs idempotent, and
+> `models.transaction.insert_plaid_rows()` skips any Plaid txn already imported from a
+> CSV (matched on amount + date ±3d, since Plaid's clean merchant name won't byte-match a
+> raw memo). Everything is gated behind `services/plaid_api.configured()` — unset = no
+> Plaid surface, app is CSV-only. See `services/plaid_api.py`, `routes/plaid.py`.
 
 ### `categories`
 Canonical category registry (replaces the old `config.CATEGORIES` constant). Seeded from
@@ -338,6 +349,15 @@ Category source is set to `'claude'`.
 | POST | /accounts | Create account |
 | POST | /accounts/\<id\>/edit | Update account |
 | POST | /accounts/\<id\>/delete | Delete (only if no transactions) |
+
+### Plaid (optional — all routes 404 unless `services/plaid_api.configured()`)
+| Method | Path | Purpose |
+|---|---|---|
+| POST | /plaid/link-token | JSON link_token for the browser Plaid Link flow |
+| POST | /plaid/exchange | Exchange public_token → store Item + auto-create/link accounts |
+| POST | /plaid/sandbox-link | Sandbox-only: link a fake bank with no Link UI (testing) |
+| POST | /plaid/sync | Cursor sync all Items → dedup-aware insert → Claude → flash summary |
+| POST | /plaid/\<item_id\>/unlink | Soft-unlink an Item (keeps synced transactions) |
 
 ### Net Worth
 | Method | Path | Purpose |

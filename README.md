@@ -19,6 +19,10 @@ Your financial data never leaves your computer.
 - **CSV import with preview** — see exactly how a statement parses *before* anything is
   saved; map columns for new banks and remember the mapping per account. Re-uploading
   overlapping statements is safe (duplicates are skipped via a DB uniqueness constraint).
+- **Plaid bank sync (optional)** — connect a bank from the Accounts page to auto-pull
+  transactions instead of uploading CSVs; both work side by side. Synced rows run through
+  the same rules → Claude → review pipeline, and a sync never re-imports a transaction a
+  CSV already brought in (matched on amount + date). Off unless `PLAID_*` is set in `.env`.
 - **Rules-first categorization** — a fast, editable substring/regex rules registry handles
   most transactions with zero API cost; anything left over can optionally go to the Claude
   API, then to a review queue you confirm.
@@ -51,8 +55,9 @@ Create your accounts, then upload statements at **Transactions → Upload**.
   left for manual review (no errors). Get one at [console.anthropic.com](https://console.anthropic.com).
 - `PORT` — defaults to 5000; the example uses **5001** because macOS AirPlay Receiver
   occupies 5000.
-- `LIVE_START_MONTH`, `SCHWAB_*` — see comments in `.env.example` (only needed for the
-  optional history-bootstrap and Schwab-sync features).
+- `LIVE_START_MONTH`, `SCHWAB_*`, `PLAID_*` — see comments in `.env.example` (only needed
+  for the optional history-bootstrap, Schwab-sync, and Plaid bank-sync features). Plaid
+  Sandbox is free with fake data; leave `PLAID_*` blank to stay CSV-only.
 
 ## Bring your own statements
 

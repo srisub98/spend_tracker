@@ -7,6 +7,45 @@
   <span class="spacer"></span>
 </div>
 
+{% if plaid_configured %}
+<div class="card reveal" style="margin-bottom:24px">
+  <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+    <h2 style="margin:0">Connected Banks</h2>
+    <span class="badge">Plaid · {{ plaid_env }}</span>
+    <span class="spacer" style="flex:1"></span>
+    <button id="plaid-connect" class="btn btn-primary">Connect a bank</button>
+    {% if plaid_env == 'sandbox' %}
+      <form method="post" action="{{ url_for('plaid.sandbox_link') }}" style="display:inline">
+        <button class="btn" title="Link a fake sandbox bank for testing">Add sandbox bank</button>
+      </form>
+    {% endif %}
+    {% if plaid_items %}
+      <form method="post" action="{{ url_for('plaid.sync') }}" style="display:inline">
+        <button class="btn btn-primary">Sync transactions</button>
+      </form>
+    {% endif %}
+  </div>
+  {% for it in plaid_items %}
+    <div class="list-row">
+      <div class="list-ic">⛁</div>
+      <div class="list-main">
+        <div class="list-name">{{ it.institution }}</div>
+        <div class="list-sub">
+          {% if it.synced %}last synced {{ it.updated_at }}{% else %}never synced{% endif %}
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('plaid.unlink', item_id=it.item_id) }}"
+            onsubmit="return confirm('Unlink this bank? Already-synced transactions are kept.')">
+        <button class="btn-icon" title="Unlink">✕</button>
+      </form>
+    </div>
+  {% else %}
+    <p class="empty" style="margin-top:12px">No banks connected yet. Auto-sync transactions
+      with one click — or keep uploading CSVs, both work.</p>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="two-col">
   <div class="card reveal">
     <h2>Your Accounts</h2>
@@ -24,6 +63,7 @@
             {%- if a.external_ref %} · #{{ a.external_ref }}{% endif %}
             {%- if a.is_liability %} · <span class="badge badge-owed">liability</span>{% endif %}
             {%- if a.flip_amount_signs %} · <span class="badge">flips signs</span>{% endif %}
+            {%- if a.plaid_account_id %} · <span class="badge">Plaid</span>{% endif %}
           </div>
         </div>
         <div class="mono {% if a.is_liability and bal %}negative{% endif %}" style="font-weight:600">
@@ -87,4 +127,41 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if plaid_configured %}
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+<script>
+  // Plaid Link: fetch a link_token, open Link, post the returned public_token back.
+  // Inherently needs Plaid's CDN + network; only loaded on this page when configured.
+  (function () {
+    var btn = document.getElementById('plaid-connect');
+    if (!btn || !window.Plaid) return;
+    btn.addEventListener('click', async function () {
+      btn.disabled = true;
+      try {
+        var r = await fetch('{{ url_for("plaid.link_token") }}', { method: 'POST' });
+        var data = await r.json();
+        if (!data.link_token) throw new Error(data.error || 'no link token');
+        Plaid.create({
+          token: data.link_token,
+          onSuccess: async function (public_token) {
+            await fetch('{{ url_for("plaid.exchange") }}', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ public_token: public_token }),
+            });
+            window.location.reload();
+          },
+          onExit: function () { btn.disabled = false; },
+        }).open();
+      } catch (e) {
+        alert('Could not start Plaid Link: ' + e.message);
+        btn.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}
