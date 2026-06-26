@@ -1,27 +1,32 @@
 """
 Investment critic v1 (PRD-2 Phase 9): rule-based checks over the latest
-holdings. Fund metadata is a small hand-maintained map for the funds Sri
-actually holds — refresh the weights/ERs quarterly, they drift slowly.
+holdings. Fund metadata is a small hand-maintained map of look-through
+weight for a single employer's stock inside common index/growth funds —
+sample weights below are calibrated for one mega-cap tech employer; if you
+set EMPLOYER_STOCK_SYMBOL to a different company, edit each fund's
+`employer_w` to that company's actual weight in the fund (refresh
+quarterly, they drift slowly).
 """
+import config
 
 META_AS_OF = "2026-06"
 
-# expense ratio (%/yr), approx META look-through weight (% of fund), short note
+# expense ratio (%/yr), approx employer-stock look-through weight (% of fund), short note
 FUND_META = {
-    "VFIAX": {"er": 0.04, "meta_w": 2.5,  "note": "S&P 500"},
-    "SPY":   {"er": 0.09, "meta_w": 2.5,  "note": "S&P 500"},
-    "QQQ":   {"er": 0.20, "meta_w": 5.0,  "note": "Nasdaq-100"},
-    "MGK":   {"er": 0.07, "meta_w": 5.0,  "note": "mega-cap growth"},
-    "VONG":  {"er": 0.08, "meta_w": 4.5,  "note": "Russell 1000 growth"},
-    "VIG":   {"er": 0.05, "meta_w": 0.0,  "note": "dividend appreciation"},
-    "VDIGX": {"er": 0.29, "meta_w": 0.0,  "note": "active dividend growth"},
-    "ARTIX": {"er": 1.19, "meta_w": 0.0,  "note": "active international"},
-    "RPMGX": {"er": 0.77, "meta_w": 0.0,  "note": "active mid-cap growth"},
-    "VHT":   {"er": 0.10, "meta_w": 0.0,  "note": "healthcare sector"},
-    "VDC":   {"er": 0.10, "meta_w": 0.0,  "note": "consumer staples sector"},
-    "VPU":   {"er": 0.10, "meta_w": 0.0,  "note": "utilities sector"},
-    "XLE":   {"er": 0.09, "meta_w": 0.0,  "note": "energy sector"},
-    "SWVXX": {"er": 0.34, "meta_w": 0.0,  "note": "money market"},
+    "VFIAX": {"er": 0.04, "employer_w": 2.5,  "note": "S&P 500"},
+    "SPY":   {"er": 0.09, "employer_w": 2.5,  "note": "S&P 500"},
+    "QQQ":   {"er": 0.20, "employer_w": 5.0,  "note": "Nasdaq-100"},
+    "MGK":   {"er": 0.07, "employer_w": 5.0,  "note": "mega-cap growth"},
+    "VONG":  {"er": 0.08, "employer_w": 4.5,  "note": "Russell 1000 growth"},
+    "VIG":   {"er": 0.05, "employer_w": 0.0,  "note": "dividend appreciation"},
+    "VDIGX": {"er": 0.29, "employer_w": 0.0,  "note": "active dividend growth"},
+    "ARTIX": {"er": 1.19, "employer_w": 0.0,  "note": "active international"},
+    "RPMGX": {"er": 0.77, "employer_w": 0.0,  "note": "active mid-cap growth"},
+    "VHT":   {"er": 0.10, "employer_w": 0.0,  "note": "healthcare sector"},
+    "VDC":   {"er": 0.10, "employer_w": 0.0,  "note": "consumer staples sector"},
+    "VPU":   {"er": 0.10, "employer_w": 0.0,  "note": "utilities sector"},
+    "XLE":   {"er": 0.09, "employer_w": 0.0,  "note": "energy sector"},
+    "SWVXX": {"er": 0.34, "employer_w": 0.0,  "note": "money market"},
 }
 
 SP500_FUNDS = {"VFIAX", "SPY"}
@@ -39,21 +44,24 @@ def checks(rows):
         return out
     val = {r["symbol"]: r["value"] for r in rows}
 
-    # 1. Look-through META concentration (employer!)
-    direct = val.get("META", 0.0)
-    indirect = sum(v * FUND_META[s]["meta_w"] / 100
-                   for s, v in val.items() if s in FUND_META)
-    if direct:
-        out.append({
-            "level": "warn",
-            "title": f"META is {(direct + indirect) / invested:.0%} of invested "
-                     f"(look-through), and it's your employer",
-            "body": f"${direct:,.0f} direct + ~${indirect:,.0f} inside your index/growth "
-                    f"funds (S&P 500 ~2.5%, QQQ/MGK ~5% each, as of {META_AS_OF}). "
-                    "Add the paycheck and unvested RSUs that also depend on Meta and "
-                    "this is triple concentration — selling vested shares as they land "
-                    "is the standard fix.",
-        })
+    # 1. Look-through employer-stock concentration — no-op unless
+    # EMPLOYER_STOCK_SYMBOL is set (see config.py).
+    symbol = config.EMPLOYER_STOCK_SYMBOL
+    if symbol:
+        direct = val.get(symbol, 0.0)
+        indirect = sum(v * FUND_META[s]["employer_w"] / 100
+                       for s, v in val.items() if s in FUND_META)
+        if direct:
+            out.append({
+                "level": "warn",
+                "title": f"{symbol} is {(direct + indirect) / invested:.0%} of invested "
+                         f"(look-through), and it's your employer",
+                "body": f"${direct:,.0f} direct + ~${indirect:,.0f} inside your index/growth "
+                        f"funds (S&P 500 ~2.5%, QQQ/MGK ~5% each, as of {META_AS_OF}). "
+                        "Add the paycheck and unvested RSUs that also depend on it and "
+                        "this is triple concentration — selling vested shares as they land "
+                        "is the standard fix.",
+            })
 
     # 2. Duplicate / overlapping funds
     sp = [s for s in SP500_FUNDS if val.get(s)]
@@ -102,9 +110,13 @@ def checks(rows):
     return out
 
 
-def look_through_meta(rows):
-    """(direct $, indirect $) META exposure for the allocation header."""
+def look_through_employer(rows):
+    """(direct $, indirect $) employer-stock exposure for the allocation
+    header. Returns (0.0, 0.0) if EMPLOYER_STOCK_SYMBOL is unset."""
+    symbol = config.EMPLOYER_STOCK_SYMBOL
+    if not symbol:
+        return 0.0, 0.0
     val = {r["symbol"]: r["value"] for r in rows}
-    indirect = sum(v * FUND_META[s]["meta_w"] / 100
+    indirect = sum(v * FUND_META[s]["employer_w"] / 100
                    for s, v in val.items() if s in FUND_META)
-    return val.get("META", 0.0), indirect
+    return val.get(symbol, 0.0), indirect

@@ -1,5 +1,5 @@
 """
-Seed data for the categories table. Names match Sri's Google Sheet (docs/PRD.md §4)
+Seed data for the categories table. Names match the author's Google Sheet (docs/PRD.md §4)
 so bootstrapped history and live transactions pivot in the same table.
 Inserted by init_db() only when the categories table is empty.
 """

@@ -88,7 +88,7 @@ DEMO_TRANSACTIONS = [
     # Citi Double Cash — everyday card spend
     ("Citi Double Cash", "06-04", "TRADER JOE'S #455",            -78.22, None, None),
     ("Citi Double Cash", "06-06", "SAFEWAY #1234",                -54.10, None, None),
-    ("Citi Double Cash", "06-07", "BLUE BOTTLE COFFEE",            -6.50, None, None),
+    ("Citi Double Cash", "06-07", "STARBUCKS #4421",               -6.50, None, None),
     ("Citi Double Cash", "06-08", "CHIPOTLE 2231",                -13.85, None, None),
     ("Citi Double Cash", "06-09", "NETFLIX.COM",                  -15.49, None, None),
     ("Citi Double Cash", "06-11", "SPOTIFY USA",                  -10.99, None, None),
