@@ -30,5 +30,10 @@ PLAID_ENV = os.getenv("PLAID_ENV", "sandbox")  # sandbox | production
 # Months < LIVE_START_MONTH read from monthly_summaries; months >= read from transactions.
 LIVE_START_MONTH = os.getenv("LIVE_START_MONTH", "2026-06")
 
+# Optional: ticker of your employer's stock. Powers the investments-page
+# look-through concentration check (services/critic.py) and defaults the
+# RSU-vest form's symbol. Blank = that check is skipped entirely.
+EMPLOYER_STOCK_SYMBOL = os.getenv("EMPLOYER_STOCK_SYMBOL", "").strip().upper()
+
 # Categories now live in the `categories` DB table (seeded from database/seed_data.py).
 # Use models.category.get_names() instead of a config constant.

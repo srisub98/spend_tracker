@@ -20,7 +20,7 @@ A local-only personal finance tracker. Upload CSV bank/credit/brokerage statemen
 ## Design standard (2026-06-10)
 
 The UI follows the **minimalist warm-neutral design system** in `docs/design/DESIGN.md`
-(from Sri's design handoff; tokens live in `static/css/main.css` `:root`, interactions in
+(from the author's design handoff; tokens live in `static/css/main.css` `:root`, interactions in
 `static/js/main.js`). Core rules when touching any template:
 - **Accent is near-black (`--ink`)** — buttons, active nav, hero cards, focus rings.
   Green (`--pos`)/red (`--neg`) appear ONLY on numeric figures and trend chips, never on chrome.
@@ -210,7 +210,7 @@ Tracks each financial account (checking, savings, credit card, brokerage, loan).
 
 ### `categories`
 Canonical category registry (replaces the old `config.CATEGORIES` constant). Seeded from
-`database/seed_data.py` on first init; names match Sri's Google Sheet. `kind` is one of
+`database/seed_data.py` on first init; names match the author's Google Sheet. `kind` is one of
 `expense` / `income` / `transfer` (neutral, excluded from spend+income) / `investment`
 (money into brokerage; net income − investments = FCF).
 
@@ -427,3 +427,6 @@ Category source is set to `'claude'`.
 - **Plaid sync mirrors the Schwab integration pattern** — a single `configured()` predicate
   gates both the routes (404 if unset) and the template UI, so an external API integration
   is always strictly additive: unset env vars reproduce yesterday's app exactly
+- **Person-specific behavior is config-gated, never hardcoded** — e.g. `EMPLOYER_STOCK_SYMBOL`
+  (investments-page concentration check in `services/critic.py`) is blank by default and the
+  check no-ops entirely until set, so the app has no baked-in assumptions about who's running it

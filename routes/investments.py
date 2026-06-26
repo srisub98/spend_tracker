@@ -1,5 +1,6 @@
 from datetime import date
 from flask import Blueprint, render_template, request
+import config
 import models.investment as inv_model
 import models.account as account_model
 import models.net_worth as nw_model
@@ -58,10 +59,13 @@ def index():
          for a in accounts if balances.get(a["id"])],
         key=lambda x: -x["value"])
 
-    meta_direct, meta_indirect = critic.look_through_meta(rows)
-    meta = next((r for r in rows if r["symbol"] == "META"), None)
+    employer_symbol = config.EMPLOYER_STOCK_SYMBOL
+    employer_direct, employer_indirect = critic.look_through_employer(rows)
+    employer_holding = next((r for r in rows if r["symbol"] == employer_symbol), None) \
+        if employer_symbol else None
     vest_account = next(
-        (a for a in accounts if "meta" in (a["name"] or "").lower()),
+        (a for a in accounts
+         if employer_symbol and employer_symbol.lower() in (a["name"] or "").lower()),
         next((a for a in accounts if a["type"] == "brokerage"), None))
 
     return render_template(
@@ -70,7 +74,8 @@ def index():
         total=total, cash=cash, invested=invested,
         basis_total=basis_total, gain_total=gain_total,
         gain_pct=(gain_total / basis_total) if basis_total else None,
-        top=top, vest_ytd=vest_ytd, vest_year=year, meta=meta,
+        top=top, vest_ytd=vest_ytd, vest_year=year,
+        employer_symbol=employer_symbol, employer_holding=employer_holding,
         vests=vests, accounts=accounts,
         vest_account_id=vest_account["id"] if vest_account else None,
         today=date.today().isoformat(),
@@ -80,7 +85,7 @@ def index():
         class_order=nw_model.CLASS_ORDER,
         critic_checks=critic.checks(rows),
         income=inv_model.income_ytd(year),
-        meta_direct=meta_direct, meta_indirect=meta_indirect,
+        employer_direct=employer_direct, employer_indirect=employer_indirect,
     )
 
 

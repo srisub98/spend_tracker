@@ -55,10 +55,11 @@ Create your accounts, then upload statements at **Transactions → Upload**.
   left for manual review (no errors). Get one at [console.anthropic.com](https://console.anthropic.com).
 - `PORT` — defaults to 5000; the example uses **5001** because macOS AirPlay Receiver
   occupies 5000.
-- `LIVE_START_MONTH`, `SCHWAB_*`, `PLAID_*` — see comments in `.env.example` (only needed
-  for the optional history-bootstrap, Schwab-sync, and Plaid bank-sync features). Plaid
-  Sandbox is free with fake data, and real banks are free too under Plaid's no-cost
-  Trial plan (up to 10 linked banks); leave `PLAID_*` blank to stay CSV-only.
+- `LIVE_START_MONTH`, `SCHWAB_*`, `PLAID_*`, `EMPLOYER_STOCK_SYMBOL` — see comments in
+  `.env.example` (only needed for the optional history-bootstrap, Schwab-sync, Plaid
+  bank-sync, and investments-page concentration-check features). Plaid Sandbox is free
+  with fake data, and real banks are free too under Plaid's no-cost Trial plan (up to 10
+  linked banks); leave `PLAID_*` blank to stay CSV-only.
 
 ## Bring your own statements
 

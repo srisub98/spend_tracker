@@ -12,20 +12,21 @@
 
 ## 1. Goal
 
-Replace Sri's Google Sheets finance tracker ("2022–2026 yearly tabs" workbook) with this local Flask app. Two go-forward workflows, one one-time bootstrap:
+Replace the author's Google Sheets finance tracker ("2022–2026 yearly tabs" workbook) with this local Flask app. Two go-forward workflows, one one-time bootstrap:
 
 1. **Go-forward spending:** upload net-new credit card / bank CSVs monthly → an editable *rules registry* categorizes them (Claude API as fallback) → cashflow dashboard.
 2. **Go-forward net worth:** upload Vanguard + Schwab holdings CSVs monthly, type in the handful of accounts that have no CSV → net worth dashboard.
 3. **One-time bootstrap:** import the historical monthly aggregates from the Google Sheet (income, expenses by category, per-account balances — all by month) so the dashboard has years of history from day one.
 
-**Critical constraint:** Sri will NOT backfill historical transaction CSVs. History exists only as monthly aggregates from the sheet. The dashboard must seamlessly merge sheet-sourced aggregates (pre-cutover) with transaction-derived aggregates (post-cutover).
+**Critical constraint:** the author will NOT backfill historical transaction CSVs. History exists only as monthly aggregates from the sheet. The dashboard must seamlessly merge sheet-sourced aggregates (pre-cutover) with transaction-derived aggregates (post-cutover).
 
 ---
 
 ## 2. The target: what the Google Sheet does
 
-Sheet URL (may require auth; raw pull saved at `data/bootstrap/sheet_raw_pull_2026-06-09.md`):
-`https://docs.google.com/spreadsheets/d/1SMGJXxdwLWORwwQHJpS42fTwWZExoutn-jjBYo_HRac`
+Sheet: the author's private Google Sheet (URL deliberately not reproduced here — it's a
+live link to real financial data). A raw markdown pull is kept locally at
+`data/bootstrap/sheet_raw_pull_2026-06-09.md` for reference (git-ignored, never committed).
 
 One tab per year. Each tab contains these blocks (positions vary slightly by year — parse by anchor text, not cell coordinates):
 
@@ -232,7 +233,7 @@ richer than the Drive pull suggested):**
 - A `Transactions` tab holds 1,063 card-level rows (Apr 2025+, columns: Date, Purchase,
   Price, Category, Split, Notes, Final Cost, Amount Owed, Source). Imported as real
   transactions (`import_batch_id='sheet-bootstrap'`, account "Card (sheet import)",
-  amount = −Final Cost, i.e. Sri's share after splits). They're card-only (no rent/income),
+  amount = −Final Cost, i.e. the author's share after splits). They're card-only (no rent/income),
   so Budget aggregates stay authoritative pre-cutover; `LIVE_START_MONTH=2026-05`
   (cashflow data ends 2026-04; balances end 2026-06).
 - Old-tab quirks handled: 2020 splits Rent/Utilities (merged), "Misc." → Misc,
@@ -276,7 +277,7 @@ Original checklist:
 sheet's 2025 tab exactly; NW page shows current $500,000 MoM +$50,000; the 2024 grid
 includes the closed Etrade account. Number formatting is whole-dollar in tables.
 
-**Pulled forward from Phase 3 (Sri requested it for adding new banks):** every upload now
+**Pulled forward from Phase 3 (requested for adding new banks):** every upload now
 goes through a **preview step** — nothing inserts until confirmed. The preview shows parsed
 sample rows with sign coloring, lets you remap columns via dropdowns (for banks whose
 headers auto-detection misses) and toggle sign-flip, then "remember these settings" persists
@@ -294,7 +295,7 @@ import (correct signs/categories) → saved mapping auto-applied on re-upload �
 - [x] Review UI: "+ Rule" button per transaction (prefills pattern/category on /rules).
 
 **Verified on real data:** re-apply categorized 9 of the 31 uncategorized bootstrap rows
-(31 → 22) while the 1,029 user-sourced rows stayed byte-identical — including UBER rows Sri
+(31 → 22) while the 1,029 user-sourced rows stayed byte-identical — including UBER rows the author
 had deliberately filed as Travel/Entertainment rather than Car, and Apple charges filed as
 Fitness (Apple Fitness+). Creating "valencia farm" → Groceries via the form + re-apply
 categorized the matching bootstrap row with `source='rule'`.
@@ -307,7 +308,7 @@ test patterns against history — card descriptors get truncated mid-word.
 
 **Done when:** a Citi CSV imports with correct signs end-to-end; creating a rule from review and re-applying categorizes look-alike transactions; user-corrected categories survive re-apply.
 
-**Real-statement shakedown (2026-06-10):** imported Sri's actual May 1 – Jun 10 statements —
+**Real-statement shakedown (2026-06-10):** imported the author's actual May 1 – Jun 10 statements —
 Citi checking (24 rows), Citi Double Cash (30), Amex (132; flip_amount_signs=1). Fixes that
 came out of it (now in csv_parser.py):
 - Citi checking dates use dashes (`06-09-2026`) → added `%m-%d-%Y` to `_parse_date`.
@@ -328,7 +329,7 @@ came out of it (now in csv_parser.py):
 
 ### Phase 4a — Brokerage holdings via CSV upload — ✅ DONE 2026-06-09
 
-> Decision history: Plaid was considered and **rejected the same day** (Sri: no paid
+> Decision history: Plaid was considered and **rejected the same day** (rationale: no paid
 > services — Plaid's free Development env is gone, Investments is a paid product).
 > CSVs are the primary path; files stay local in `data/uploads/`. For direct pulls,
 > see Phase 4b (free Schwab official API). **Revisited 2026-06-25:** Plaid introduced a
@@ -354,19 +355,19 @@ came out of it (now in csv_parser.py):
 - [x] Holdings/allocation table on /net-worth: latest snapshot's positions aggregated by
   ticker across accounts (Schwab personal + ExampleCo + Vanguard combined), % of holdings.
 
-**Real-file shakedown (2026-06-10):** imported Sri's actual Schwab exports — "Schwab @0"
+**Real-file shakedown (2026-06-10):** imported the author's actual Schwab exports — "Schwab @0"
 (personal, 23 positions) and "Designated Bene Individual @0" (the ExampleCo RSU account,
 281 EXMP + cash). Parser fixes from real files: total row is **"Positions Total"** (not
 "Account Total"), the type column is **"Asset Type"** (not "Security Type"), and we now
 capture **asset_type + cost_basis** per holding (new columns via `_migrate()`).
-**Brokerage cash classification** (Sri's requirement): holdings rows with
+**Brokerage cash classification** (the author's requirement): holdings rows with
 asset_type='cash' (sweep + money market like SWVXX — $50k of it in Schwab personal!) are
 reclassified from the account's class into Cash in the class chart and the year-grid
 subtotals. Chart/grid now use the latest snapshot **per month**, so a mid-month positions
 upload doesn't fake a dip. Both files' computed totals matched the files' own Positions
 Total to the cent.
 
-**TODO (Sri, 2026-06-10): rule engine for holdings** — ✅ shipped same day in its simplest
+**TODO (2026-06-10): rule engine for holdings** — ✅ shipped same day in its simplest
 useful form: per-symbol asset-type overrides (`holding_overrides` table), set via a Class
 dropdown on each /net-worth/equities row, applied at read time across ALL snapshots
 (grouping, cash reclassification in the NW chart/grid, everything goes through
@@ -374,7 +375,7 @@ dropdown on each /net-worth/equities row, applied at read time across ALL snapsh
 Pattern-based rules (regex over description, region tags) remain a future idea if
 per-symbol ever isn't enough.
 
-### Phases 5.5 — Life tab, income summary, equities page — ✅ DONE 2026-06-10 (Sri's asks)
+### Phases 5.5 — Life tab, income summary, equities page — ✅ DONE 2026-06-10 (the author's asks)
 - [x] **/life**: declared fixed/needed monthly spend (`life_items` table) with stat cards:
   needed/mo, base-pay/mo (YTD avg of Paycheck months), needed as % of base pay, avg actual
   spend/mo, discretionary/mo. Seeded from the sheet's recurring-expenses list ($5,000/mo
@@ -387,9 +388,9 @@ per-symbol ever isn't enough.
   This is the seed of the Phase 6 investment critic.
 - [x] Inline category override on /transactions (AJAX select per row, saves as user-sourced).
 
-### Phase 4b — Direct Schwab pull via the official (free) Schwab API — 🔶 BUILT 2026-06-10, awaiting Sri's developer-app approval
+### Phase 4b — Direct Schwab pull via the official (free) Schwab API — 🔶 BUILT 2026-06-10, awaiting the author's developer-app approval
 
-**Target workflow (Sri, 2026-06-10):** only upload CitiBank/CapitalOne checking + Amex/Citi
+**Target workflow (2026-06-10):** only upload CitiBank/CapitalOne checking + Amex/Citi
 card CSVs; everything brokerage syncs via API.
 
 **Implemented** (`services/schwab_api.py`, `schwab_tokens` table, routes
@@ -404,12 +405,12 @@ card CSVs; everything brokerage syncs via API.
   `currentBalances.cashBalance`, cost basis = averagePrice × qty. Account matching reuses
   `external_ref` (983 / 401 already saved). `map_account()` is pure — unit-tested against a
   synthetic payload; values matched the real CSV import within rounding.
-- **Cannot be end-to-end tested until Sri's app is approved**: register at
+- **Cannot be end-to-end tested until the author's app is approved**: register at
   developer.schwab.com (product "Accounts and Trading Production", callback exactly
   `https://127.0.0.1`), wait for "Ready for use", set `SCHWAB_APP_KEY`/`SECRET` in `.env`.
 
-**Hard limits confirmed (told to Sri):** the Trader API returns actual Schwab accounts
-only — **linked external accounts (his Vanguard) are NOT included** (stays CSV/manual),
+**Hard limits confirmed:** the Trader API returns actual Schwab accounts
+only — **linked external accounts (e.g. a separately-linked Vanguard account) are NOT included** (stays CSV/manual),
 and **unvested RSUs are NOT exposed** (Equity Award Center has no public API). The
 Equities page shows vested shares + post-tax RSU vest income YTD ($50,000 in 2026)
 instead; upcoming-vest tracking would need a manual vest-schedule table (future idea).
@@ -430,11 +431,13 @@ instead; upcoming-vest tracking would need a manual vest-schedule table (future 
   income-vs-expenses chart, category bars, account×month table — and **Chart.js is now
   embedded inline** (vendored at `static/js/chart.umd.min.js`), zero CDN references,
   works fully offline.
-- [x] ~~`.gitignore` covering `data/`, `.env`, `.venv/`~~ — superseded 2026-06-10: Sri
-  decided this repo will **never** go to git (real financial data), so `.gitignore` was
-  removed entirely. Do not `git init` here.
+- [x] ~~`.gitignore` covering `data/`, `.env`, `.venv/`~~ — superseded 2026-06-10: the author
+  decided this repo would **never** go to git (real financial data), so `.gitignore` was
+  removed entirely. **Superseded again 2026-06-25:** the repo was restructured to be
+  shareable — git (and a restored `.gitignore` covering `data/`/`.env`/`*.db`) came back;
+  see CLAUDE.md's Git & data safety note.
 
-### Phase 5.6 — RSU vest log — ✅ DONE 2026-06-10 (Sri: "the equities tab isn't properly getting my vest information — the current approach doesn't handle the May vest")
+### Phase 5.6 — RSU vest log — ✅ DONE 2026-06-10 (ask: "the equities tab isn't properly getting my vest information — the current approach doesn't handle the May vest")
 **Root cause:** vests never appear in checking/card CSVs (shares land at Schwab), and the
 sheet's "Post Tax RSU Vest" row only covers pre-cutover months — so any vest in a live
 month (≥ LIVE_START_MONTH) was missing from income/net income/FCF entirely.
@@ -445,11 +448,11 @@ month (≥ LIVE_START_MONTH) was missing from income/net income/FCF entirely.
   UNIQUE constraint (same date+description+amount logs once).
 - [x] Vest history table on the same card: sheet monthly aggregates (pre-cutover) +
   logged vest transactions (post-cutover), via `aggregates.vest_history()`.
-- [ ] **Sri action:** log the May 2026 vest (post-tax $ + share count) — and each future
+- [ ] **Follow-up action:** log the May 2026 vest (post-tax $ + share count) — and each future
   vest on vest day. If the Schwab API ever exposes EAC transfers, auto-detect then.
 
 ### Phase 6 — Future / not now
-- **Investment critic** (Sri's idea, 2026-06-09): analysis layer over the `holdings` table —
+- **Investment critic** (the author's idea, 2026-06-09): analysis layer over the `holdings` table —
   concentration risk (e.g. EXMP position + RSU exposure at the employer that pays the
   paychecks = double concentration), allocation drift vs a target, fund overlap (VTI vs
   VTSAX both = US total market), cash drag, expense-ratio audit. Could be rule-based first,
@@ -486,16 +489,64 @@ month (≥ LIVE_START_MONTH) was missing from income/net income/FCF entirely.
 - [x] Synced rows run through the same `apply_rules()` → Claude → review pipeline as a
   CSV import (`routes/plaid.py sync()` mirrors `transactions.upload_confirm()`).
 
+### Phase 8 — Repo genericization / sharing-readiness pass — ✅ DONE 2026-06-26
+
+> Audit requested by the author: check for personally identifying data before sharing
+> this repo more broadly, and make the app itself (not just the docs) safe to hand to
+> someone else.
+
+**Findings:** git history was already clean (no `data/`/`.env`/`*.db` ever committed), but
+three things were baked into the *app*, not just docs:
+- `services/critic.py` and `templates/net_worth/equities.html` hardcoded the literal
+  ticker `"META"` as "your employer" — anyone reading the code learned the employer.
+- `services/rules.py` SEED_RULES shipped a block of the author's own Bay-Area merchants
+  (a corner liquor store, a specific yoga studio, a specific donation target, etc.) to
+  every fresh install — personal and useless for anyone else's bank statements.
+- This doc's §2 embedded a live URL to the author's actual private Google Sheet — a real
+  link to real financial data, not just descriptive text (the single highest-severity
+  finding; everything else here was names/pronouns).
+
+**Fixed:**
+- [x] New `EMPLOYER_STOCK_SYMBOL` env var (`config.py`, `.env.example`) — the
+  look-through concentration check (`services/critic.py`) and the RSU-vest form's
+  default symbol (`routes/net_worth.py`, `routes/investments.py`,
+  `templates/net_worth/equities.html`) now read it instead of a hardcoded ticker, and
+  no-op entirely when it's unset — same `configured()`-style pattern as Plaid/Schwab.
+- [x] Removed the personal merchant block from `SEED_RULES`; folded the 3 genuinely
+  generic patterns in it (`tst*` Toast POS, `anthropic` subscription, `cash withdrawal`)
+  into their proper generic groups instead of dropping them.
+- [x] Removed the real Google Sheet URL from §2; the raw markdown pull stays local-only
+  (`data/bootstrap/`, git-ignored).
+- [x] Swapped the author's name/pronouns for generic phrasing throughout this doc and
+  `docs/PRD-2.md` — kept every decision's structure and rationale intact, only the
+  identity changed (per the author's explicit preference, 2026-06-26).
+- [x] Two stale "this repo will never use git" claims (here and in PRD-2 §6) marked
+  **superseded 2026-06-25** with a pointer to CLAUDE.md's Git & data safety note, since
+  the repo was restructured to be shareable that day.
+
+**Verified:** full pytest suite (27 tests) + Playwright e2e (10 tests) green after the
+rules/critic changes; manually booted the app against a scratch demo DB and confirmed
+`/investments` renders correctly both with `EMPLOYER_STOCK_SYMBOL` unset (no employer
+mention, empty vest-symbol field) and set to a test ticker (concentration warning fires
+correctly).
+
+**Left as-is (low priority):** `scripts/bootstrap_from_sheet.py`'s `ACCOUNT_MAP` still has
+a literal `"Schwab - Meta"` key — it's matched against the literal row label in the
+author's own real (git-ignored) sheet export, so renaming it would break the author's own
+bootstrap. Already disclosed in README.md as personal/skippable one-time tooling, not a
+generic feature.
+
 ---
 
-## 8. Decisions log
+## 9. Decisions log
 
 | Decision | Rationale |
 |---|---|
-| History = monthly aggregates, not synthetic transactions | Sri won't backfill CSVs; faking transactions would pollute the transaction table and dedup logic |
+| History = monthly aggregates, not synthetic transactions | the author won't backfill CSVs; faking transactions would pollute the transaction table and dedup logic |
 | `LIVE_START_MONTH` hard cutover, sheet wins before it | Simple, explicit, no double-counting; partial pre-cutover CSV data ignored by dashboards |
 | Categories renamed to match the sheet | Historical and live data must pivot in one table; sheet names are the canon |
 | Rules in DB, not code | User asked for an editable "registry"; seed from existing rules.py |
 | Snapshots (not holdings) remain the NW source of truth | Mixed manual + CSV accounts; holdings are enrichment attached to snapshots |
 | Wipe DB instead of migrations | DB has only test data (verified 2026-06-09) |
 | Plaid added for transaction sync, transactions-only (2026-06-25) | Original 2026-06-09 rejection was cost-based (paid-only Items); Plaid's new Trial plan (free, 10 real Items) reverses that for this single-user app. Holdings/net worth stay on Schwab's free API — Plaid Investments is still paid |
+| Employer ticker moved to `EMPLOYER_STOCK_SYMBOL` env var (2026-06-26) | The investment critic and RSU-vest defaults had the employer hardcoded as `"META"`; config-gating it (no-op when unset) follows the same additive pattern as Plaid/Schwab and makes the app safe to hand to someone else |

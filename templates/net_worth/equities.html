@@ -104,7 +104,7 @@
 {% if top and top.value / invested > 0.25 %}
 <div class="flash flash-error">
   ⚠ Concentration: {{ top.symbol }} is {{ "{:.0%}".format(top.value / invested) }} of your
-  invested holdings{% if top.symbol == 'META' %} — and it's also your employer{% endif %}.
+  invested holdings{% if employer_symbol and top.symbol == employer_symbol %} — and it's also your employer{% endif %}.
 </div>
 {% endif %}
 
@@ -112,9 +112,10 @@
   <h2>RSU Vests</h2>
   <p>
     <strong>${{ "{:,.0f}".format(vest_ytd) }}</strong> vested (post-tax) in {{ vest_year }} so far
-    {% if meta %} · currently holding <strong>{{ "{:,.0f}".format(meta.quantity) }} META</strong>
-      (${{ "{:,.0f}".format(meta.value) }}{% if meta.cost_basis and not meta.basis_incomplete %},
-      {{ "{:+.1%}".format((meta.value - meta.cost_basis) / meta.cost_basis) }} vs vest-price basis{% endif %})
+    {% if employer_holding %} · currently holding
+      <strong>{{ "{:,.0f}".format(employer_holding.quantity) }} {{ employer_symbol }}</strong>
+      (${{ "{:,.0f}".format(employer_holding.value) }}{% if employer_holding.cost_basis and not employer_holding.basis_incomplete %},
+      {{ "{:+.1%}".format((employer_holding.value - employer_holding.cost_basis) / employer_holding.cost_basis) }} vs vest-price basis{% endif %})
     {% endif %}
   </p>
   <form method="post" action="{{ url_for('net_worth.log_vest') }}"
@@ -123,7 +124,7 @@
     <label>Post-tax $<br><input type="number" name="amount" step="0.01" min="0.01"
            placeholder="e.g. 11900" style="width:110px" required></label>
     <label>Shares (opt.)<br><input type="text" name="shares" placeholder="e.g. 17" style="width:80px"></label>
-    <label>Symbol<br><input type="text" name="symbol" value="META" style="width:80px"></label>
+    <label>Symbol<br><input type="text" name="symbol" value="{{ employer_symbol }}" style="width:80px"></label>
     <label>Account<br>
       <select name="account_id">
         {% for a in accounts %}

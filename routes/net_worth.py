@@ -2,6 +2,7 @@ import re
 from datetime import date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from werkzeug.utils import secure_filename
+import config
 import models.net_worth as nw_model
 import models.account as account_model
 from services.holdings_parser import parse_holdings
@@ -90,9 +91,10 @@ def log_vest():
         flash("Vest amount should be positive (post-tax value of the shares).", "error")
         return redirect(url_for("net_worth.equities"))
 
-    symbol = (request.form.get("symbol") or "META").strip().upper()
+    symbol = (request.form.get("symbol") or config.EMPLOYER_STOCK_SYMBOL).strip().upper()
     shares = (request.form.get("shares") or "").strip()
-    desc = f"{symbol} RSU vest" + (f" — {shares} shares" if shares else "") + " (post-tax)"
+    desc = (f"{symbol} " if symbol else "") + "RSU vest" + \
+        (f" — {shares} shares" if shares else "") + " (post-tax)"
     inserted = tx_model.bulk_insert([{
         "account_id": account_id, "date": vest_date, "description": desc,
         "amount": amount, "category": "RSU Vest", "category_source": "user",

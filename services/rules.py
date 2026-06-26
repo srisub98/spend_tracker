@@ -25,19 +25,6 @@ SEED_RULES = [
       "autopay", "payment thank you", "payment - thank you", "online payment",
       "american expr ach pmt"], "Transfers"),
 
-    # Sri's recurring merchants (from real statements, 2026-06; checked before
-    # the generic category groups below)
-    (["mr liquor", "valencia whol", "sherman marke", "foodland"], "Groceries"),
-    (["upfordayz", "motoring coff", "blue bottle"], "Food"),
-    (["abc*p 31627", "hot 8 yoga", "fitness sf", "thefeed"], "Fitness"),
-    (["google *webpass", "lemonade insurance"], "Rent + Utilities"),
-    (["tst*"], "Food"),                      # Toast POS = restaurants/bars
-    (["anthropic"], "Misc"),                 # Claude subscription
-    (["eyeconic"], "Health"),
-    (["himalayan academy"], "Donations"),
-    (["fellow barber"], "Misc"),
-    (["cash withdrawal"], "Misc"),
-
     # Groceries
     (["whole foods", "wholefds", "trader joe", "safeway", "kroger", "wegmans", "sprouts",
       "publix", "aldi", "costco", "bj's wholesale", "stop & shop", "market basket",
@@ -45,10 +32,11 @@ SEED_RULES = [
 
     # Food (restaurants + delivery) — before Car so "uber eats" wins over "uber".
     # "doordas" (not "doordash"): card descriptors truncate, e.g. "BT*DD *DOORDASAN FRANCISCO"
+    # "tst*" is the Toast POS prefix used by many independent restaurants/bars.
     (["restaurant", "doordas", "grubhub", "ubereats", "uber eats", "seamless",
       "postmates", "chick-fil-a", "mcdonald", "starbucks", "dunkin", "chipotle",
       "domino", "pizza", "sushi", "cafe ", "diner", "grill ", "bistro", "tavern",
-      "eatery", "taco bell", "wendy's", "subway ", "panera", "shake shack"], "Food"),
+      "eatery", "taco bell", "wendy's", "subway ", "panera", "shake shack", "tst*"], "Food"),
 
     # Fitness
     (["equinox", "planet fitness", "24 hour fitness", "crunch fitness", "classpass",
@@ -75,7 +63,8 @@ SEED_RULES = [
     # Misc — software/tools subscriptions ("apple.com/bil" not "bill": Apple's
     # card descriptor truncates, e.g. "APPLE.COM/BILINTERNET CHARGE")
     (["apple.com/bil", "apple one", "microsoft 365", "adobe", "dropbox", "icloud",
-      "google one", "notion", "chatgpt", "openai", "github", "figma", "slack", "zoom"], "Misc"),
+      "google one", "notion", "chatgpt", "openai", "anthropic", "github", "figma",
+      "slack", "zoom"], "Misc"),
 
     # Home — furniture/improvement
     (["home depot", "lowe's", "ikea", "wayfair", "bed bath", "container store",
@@ -111,6 +100,9 @@ SEED_RULES = [
     # Misc — fees
     (["late fee", "overdraft", "service fee", "annual fee", "interest charge",
       "foreign transaction", "atm fee"], "Misc"),
+
+    # Misc — cash
+    (["cash withdrawal", "atm withdrawal"], "Misc"),
 ]
 
 

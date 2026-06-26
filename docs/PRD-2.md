@@ -1,6 +1,6 @@
 # PRD 2 — One-Stop Shop: True Spend, Bill Settlement, Investment Ledger, Insights
 
-> **STATUS 2026-06-10: ALL FOUR PHASES BUILT AND VERIFIED, same day.** Sri's real May
+> **STATUS 2026-06-10: ALL FOUR PHASES BUILT AND VERIFIED, same day.** the author's real May
 > Vanguard statement is imported (holdings w/ basis into the 2026-05-31 snapshot, 2 buys +
 > 1 deposit in the ledger, re-import verified no-op). Implementation findings:
 > - **pypdf word-boundary trap**: `\b` can't match where the column header's `…2026` runs
@@ -24,36 +24,39 @@ daily use with real data — **additive migrations only** (`database/db.py _migr
 
 ---
 
-## 1. Sri's goals (2026-06-10, his words distilled)
+## 1. the author's goals (2026-06-10, their words distilled)
 
 1. **One-stop shop** for finance tracking and net worth.
 2. **Settle bills** — split stuff with people, track who owes what, get paid back.
 3. **Track most common categories and items**, and find **ways to save more**.
-4. Same one-stop treatment for **investments**: 30,000-ft allocation view, read his
+4. Same one-stop treatment for **investments**: 30,000-ft allocation view, read their
    **Vanguard statement** (PDF), understand **cost basis** and **any additional trades**.
 
-Also: this repo will **never** be pushed to git (real financial data). `.gitignore` was
-removed 2026-06-10 per Sri; there is no `.git/` directory and there never should be.
+Also (historical): this repo would **never** be pushed to git (real financial data).
+`.gitignore` was removed 2026-06-10 per the author's request; at the time there was no
+`.git/` directory. **Superseded 2026-06-25:** the repo was restructured to be shareable —
+git (and a restored `.gitignore` covering `data/`/`.env`/`*.db`) came back; see CLAUDE.md's
+Git & data safety note.
 
 ---
 
 ## 2. Gap analysis — what today's app gets wrong or doesn't do
 
 ### 2.1 The true-spend gap (the most important accounting fix in this PRD)
-Sri's old sheet recorded **his share** of every card charge (the Transactions tab's
+the author's old sheet recorded **their share** of every card charge (the Transactions tab's
 "Final Cost" column = price minus what friends owed). The app imports the **full card
-charge**. So whenever he fronts a group dinner, the dashboard overstates his expenses —
+charge**. So whenever the author fronts a group dinner, the dashboard overstates their expenses —
 and the existing bill-splits feature is a disconnected island: outings/line items have no
 link to the imported transactions they correspond to, settlements don't feed anything,
-and money friends owe him (the sheet's "Venmo/AppleCash" asset row) never reaches net
-worth. Important corollary: **bootstrapped sheet history is already his-share**, so only
+and money friends owe them (the sheet's "Venmo/AppleCash" asset row) never reaches net
+worth. Important corollary: **bootstrapped sheet history is already net of split shares**, so only
 live months need fixing — no historical rewrite.
 
 ### 2.2 Investments are positions-only — no ledger, no Vanguard basis
 - The Vanguard **download-center CSV has no cost basis**, so /net-worth/equities shows
   "—" for all Vanguard gains. The monthly **statement PDF has everything** (see §3).
 - There is no record of **trades**: the cashflow "Investments" row tracks cash moved into
-  brokerages, but not what was bought, when, at what price. Sri explicitly wants this.
+  brokerages, but not what was bought, when, at what price. The author explicitly wants this.
 - Dividends/capital-gains income (taxable! $5,000 YTD at Vanguard alone) is invisible.
 - Allocation exists only as the NW class chart; there's no single "what do I own across
   Schwab + Vanguard + 401k, and what's risky" page. PRD-1 Phase 6 (critic) lands here.
@@ -96,7 +99,7 @@ for audit/debugging, like `raw_csv_row`.
 - Positions CSV + (once approved) Trader API already give per-position cost basis.
 - The Trader API also exposes `GET /trader/v1/accounts/{hash}/transactions` (~1-year
   lookback) — Schwab trades can flow into the same ledger (`source='schwab_api'`) once
-  Sri's developer app is approved. Until then Schwab is positions-only; fine.
+  the author's developer app is approved. Until then Schwab is positions-only; fine.
 - Unvested RSUs remain out of reach everywhere (EAC has no API); the vest log covers it.
 
 ### 3.3 Everything else
@@ -163,7 +166,7 @@ Each independently shippable, in recommended order. 7 and 8 are the substance; 9
 compose what 7+8 store.
 
 ### Phase 7 — True spend & bill settlement
-**Goal:** the dashboard shows what *Sri* spent, not what his card was charged; getting
+**Goal:** the dashboard shows what *the author* spent, not what their card was charged; getting
 paid back is tracked per person, not per outing.
 
 - [ ] 7.1 `people` registry (auto-created from existing distinct participant names;
@@ -176,7 +179,7 @@ paid back is tracked per person, not per outing.
       `my_share`. Linking an existing outing line item to a transaction also possible
       from the outing detail page.
 - [ ] 7.3 Aggregates use true spend: in `models/aggregates.py` live-month expense SQL,
-      `COALESCE(t.my_share, t.amount)`. Sheet history needs nothing (already his share).
+      `COALESCE(t.my_share, t.amount)`. Sheet history needs nothing (already net of split shares).
       The /transactions list shows both ("−$500 · your share −$50").
 - [ ] 7.4 **Person ledger** page (/splits/people): per person — net owed across all
       outings, unsettled line items, history, "settle up" (marks all their unpaid
@@ -186,7 +189,7 @@ paid back is tracked per person, not per outing.
       convention for this exact thing).
 
 **Done when:** splitting a real imported dinner charge drops that month's Food expense to
-his share on the dashboard; the friend appears on the person ledger; settling zeroes it;
+their share on the dashboard; the friend appears on the person ledger; settling zeroes it;
 re-uploading the same statement CSV neither duplicates the transaction nor breaks the link
 (dedup keeps the same row id).
 
@@ -226,10 +229,10 @@ risky* — across Schwab, Vanguard, 401k, everything.
       their `asset_class` as single blocks), by account, by holding type; top-10 positions
       across all brokerages with combined weight.
 - [ ] 9.2 **Income view** from the ledger: YTD dividends/interest/cap-gains per account +
-      taxable total (Vanguard May YTD: $5,000 — tax-relevant, he should see it grow).
+      taxable total (Vanguard May YTD: $5,000 — tax-relevant, worth watching it grow).
 - [ ] 9.3 **Critic v1 (rule-based)** — checks rendered as flagged cards with severity:
       - Concentration incl. **look-through**: EXMP direct (43% of invested!) PLUS EXMP
-        inside VFIAX/VONG/QQQ — maintain a small static top-holdings map for *his* ~6
+        inside VFIAX/VONG/QQQ — maintain a small static top-holdings map for *the author's* ~6
         funds (hand-maintained constants; refresh quarterly), don't build a general engine.
       - Employer double-exposure: paycheck + RSUs + index overweight all on ExampleCo.
       - Fund overlap: VFIAX ⊃ VONG (Russell 1000 Growth is a subset of S&P-ish large
@@ -237,9 +240,9 @@ risky* — across Schwab, Vanguard, 401k, everything.
       - Cash drag: brokerage cash (incl. SWVXX) as % of holdings vs a 5% guideline.
       - Expense-ratio audit: static map (VDIGX 0.29% active vs VFIAX 0.04%) → annual $.
 - [ ] 9.4 Future (explicitly not now): XIRR/TWR returns from the ledger; Claude-powered
-      commentary on the critic findings (he has an API key).
+      commentary on the critic findings (an API key is available).
 
-**Done when:** Sri opens /investments and can answer allocation, income YTD, and "what
+**Done when:** the author opens /investments and can answer allocation, income YTD, and "what
 would a sensible advisor nag me about" without opening Schwab/Vanguard.
 
 ### Phase 10 — Spending insights & save-more
@@ -268,14 +271,14 @@ minute, with numbers (not vibes) behind every suggestion.
 
 | Decision | Rationale |
 |---|---|
-| `my_share` NULL = full amount mine; only splits set it | Zero migration risk; sheet-era rows are already his-share, so history is consistent for free |
+| `my_share` NULL = full amount mine; only splits set it | Zero migration risk; sheet-era rows are already net of split shares, so history is consistent for free |
 | Reinvested dividends/cap-gains do NOT enter cashflow income | Would inflate income vs the sheet's methodology (it never counted them); they live in the investment ledger + /investments income view. Bank interest stays a cashflow category |
 | Statement PDF becomes the primary Vanguard input; CSV stays as fallback | PDF has basis/trades/income; CSV has none of it. Monthly statement cadence matches snapshot cadence |
 | Validation-driven PDF parsing, raw text stored | pypdf run-together columns are ambiguous by regex alone (prototyped 2026-06-10); arithmetic cross-checks make it deterministic, stored raw text makes drift debuggable |
 | Settlement is per-person, not per-outing | How people actually settle ("you owe me $50 total"), and matches the sheet's per-person owed summary |
-| Critic uses static hand-maintained fund metadata | He holds ~6 funds; a lookup-API integration is overkill and adds a dependency for data that changes quarterly |
+| Critic uses static hand-maintained fund metadata | The author holds ~6 funds; a lookup-API integration is overkill and adds a dependency for data that changes quarterly |
 | Investments ledger dedup = UNIQUE(account, date, symbol, type, amount) | Same proven pattern as transactions; statement re-imports are no-ops |
-| No git, ever, for this repo | Real financial data; `.gitignore` removed 2026-06-10 at Sri's request — nothing should ever `git init` here |
+| No git, ever, for this repo | Real financial data; `.gitignore` removed 2026-06-10 at the author's request — nothing should ever `git init` here. **Superseded 2026-06-25** (see CLAUDE.md's Git & data safety note): the repo is now a shareable git repo with a restored `.gitignore` |
 
 ---
 
