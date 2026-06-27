@@ -114,66 +114,109 @@ finance-tracker/
 ├── app.py                        # Entry point — registers blueprints, inits DB, runs Flask
 ├── config.py                     # Loads .env: DB_PATH, OUTPUT_FOLDER, LIVE_START_MONTH, PORT, etc.
 ├── requirements.txt
+├── requirements-dev.txt          # pytest, for tests/python/
 ├── .env.example
 ├── CLAUDE.md                     # This file
 │
 ├── Makefile                      # install / run / bootstrap / db-shell / reset-db
 ├── README.md                     # Human-facing quickstart
 │
+├── docs/
+│   ├── PRD.md                    # Phases 0–6 roadmap (done/absorbed)
+│   ├── PRD-2.md                  # Active roadmap: true-spend splits, Vanguard PDF import, 30k-ft allocation, insights
+│   └── design/                   # DESIGN.md — the warm-neutral design system spec
+│
 ├── scripts/
-│   └── bootstrap_from_sheet.py   # One-time import of the old Google Sheet (xlsx)
+│   ├── bootstrap_from_sheet.py   # One-time import of the old Google Sheet (xlsx)
+│   └── seed_test_db.py           # Seeds demo accounts + synthetic demo dataset (--demo); used by e2e and dev
 │
 ├── data/                         # real financial data — repo never goes to git
-│   ├── uploads/                  # Raw uploaded CSV files (kept for audit/re-import)
+│   ├── uploads/                  # Raw uploaded files, partitioned by provider (services/storage.py)
 │   ├── exports/                  # Generated Excel and HTML files
 │   ├── bootstrap/                # expenses.xlsx + raw sheet pull (bootstrap inputs)
 │   └── finance.db                # SQLite database (auto-created on first run)
 │
 ├── database/
-│   ├── db.py                     # get_db(), init_db(), uses Flask g for connection lifecycle
-│   └── schema.sql                # All CREATE TABLE statements
+│   ├── db.py                     # get_db()/init_db(), additive column migrations, category+rule seeding
+│   ├── schema.sql                # All CREATE TABLE statements
+│   └── seed_data.py              # CATEGORY_SEED — canonical category list
 │
 ├── models/
-│   ├── transaction.py            # CRUD + bulk insert + query helpers
-│   ├── account.py                # CRUD + csv_mapping persistence
+│   ├── transaction.py            # CRUD + bulk insert + Plaid insert/dedup + query helpers
+│   ├── account.py                # CRUD + csv_mapping persistence + Plaid linkage
 │   ├── category.py               # Reads the categories registry
 │   ├── rule.py                   # Reads/writes the rules registry
-│   ├── aggregates.py             # Unified cashflow reads (sheet history + live txs) — dashboards read ONLY through here
-│   ├── net_worth.py              # Snapshot CRUD + year grid + asset-class series
-│   └── bill_split.py             # Outing + participant + line item CRUD
+│   ├── aggregates.py             # Unified cashflow reads (sheet history + live txs, true-spend aware) — dashboards read ONLY through here
+│   ├── net_worth.py              # Snapshot CRUD + year grid + asset-class series + holdings
+│   ├── bill_split.py             # Outing/participant/line-item CRUD + people registry + per-person ledger/settlement
+│   ├── investment.py             # Investment ledger CRUD (trades/dividends/transfers) + YTD income/deposit rollups
+│   ├── budget.py                 # Per-category monthly budget targets, seedable from prior-year history
+│   ├── life.py                   # "Life tab" fixed/needed monthly costs + payment logging + coverage gaps
+│   └── plaid_item.py             # Plaid Item storage (access_token + sync cursor per linked institution)
 │
 ├── services/
 │   ├── csv_parser.py             # CSV ingestion: normalize columns, apply rules, dedup insert
 │   ├── rules.py                  # SEED_RULES + DB rule loading/matching (run BEFORE Claude)
 │   ├── categorizer.py            # Claude API batching — only called for unmatched transactions
+│   ├── recurring.py              # Recurring-charge/subscription detection (cadence + amount stability)
+│   ├── critic.py                 # Rule-based investment checks (e.g. employer-stock concentration look-through)
+│   ├── holdings_parser.py        # Schwab/Vanguard holdings CSV parsers
+│   ├── vanguard_pdf.py           # Vanguard monthly statement PDF parser (cost basis, trades, deposits)
+│   ├── schwab_api.py             # Schwab Trader API OAuth client (balances + positions sync)
+│   ├── plaid_api.py              # Plaid client — link/sync/map, all gated behind configured()
+│   ├── storage.py                # upload_path() — partitions uploads by provider/bucket under data/uploads/
 │   ├── excel_exporter.py         # openpyxl workbook builder (multi-sheet)
 │   └── html_exporter.py          # Self-contained HTML dashboard (Chart.js inlined)
 │
 ├── routes/
+│   ├── dashboard.py              # /dashboard/*
 │   ├── transactions.py           # /transactions/*
+│   ├── rules.py                  # /rules/*
 │   ├── accounts.py               # /accounts/*
+│   ├── plaid.py                  # /plaid/* (404s unless services/plaid_api.configured())
 │   ├── net_worth.py              # /net-worth/*
+│   ├── investments.py            # /investments/*
+│   ├── insights.py               # /insights/*
+│   ├── life.py                   # /life/*
 │   ├── bill_splits.py            # /splits/*
 │   └── exports.py                # /export/*
 │
 ├── templates/
-│   ├── base.html                 # Shared layout + nav
+│   ├── base.html                  # Shared layout + nav
+│   ├── dashboard/
+│   │   └── index.html             # Sheet-parity cashflow, quarters, recurring, budget strip
 │   ├── transactions/
-│   │   ├── index.html            # Filterable transaction list
-│   │   └── review.html           # Review/correct Claude-assigned categories
+│   │   ├── index.html             # Filterable transaction list
+│   │   ├── upload.html            # Upload form
+│   │   ├── preview.html           # Column-mapping/sign-flip preview before insert
+│   │   └── review.html            # Review/correct Claude-assigned categories
+│   ├── rules/
+│   │   └── index.html             # Registry: list, add/edit form, dry-run test
 │   ├── accounts/
 │   │   └── index.html
 │   ├── net_worth/
-│   │   └── index.html            # Net worth chart + snapshot entry form
+│   │   ├── index.html             # Net worth chart + snapshot entry form + holdings table
+│   │   ├── equities.html          # 30,000-ft allocation, positions/gains, critic checks — rendered by routes/investments.py
+│   │   ├── holdings_preview.html  # Schwab/Vanguard holdings CSV preview
+│   │   └── statement_preview.html # Vanguard statement PDF preview
+│   ├── investments/
+│   │   └── activity.html          # Investment ledger + ledger-vs-cashflow reconciliation
+│   ├── insights/
+│   │   └── index.html             # Top merchants, category trends, subscriptions, budgets, cut candidates
+│   ├── life/
+│   │   └── index.html             # Fixed/needed monthly costs + coverage gaps
 │   ├── splits/
-│   │   ├── index.html            # List of outings + who owes you total
-│   │   └── detail.html           # Single outing: line items, per-person totals, mark paid
+│   │   ├── index.html             # List of outings + who owes you total
+│   │   ├── detail.html            # Single outing: line items, per-person totals, mark paid
+│   │   └── people.html            # Per-person ledger across outings + settle/Venmo handle
 │   └── export/
-│       └── index.html            # Export buttons + last-exported timestamps
+│       └── index.html             # Export buttons + last-exported timestamps
 │
 └── static/
     ├── css/main.css
-    └── js/main.js
+    └── js/
+        ├── main.js
+        └── chart.umd.min.js        # Vendored Chart.js, loaded once in base.html
 ```
 
 ---
@@ -226,7 +269,36 @@ Historical monthly aggregates bootstrapped from the Google Sheet (`month`, `cate
 
 ### `holdings`
 Brokerage positions attached to a net-worth snapshot (filled by holdings CSV import,
-PRD Phase 4): `snapshot_id`, `account_id`, `symbol`, `quantity`, `price`, `market_value`.
+PRD Phase 4): `snapshot_id`, `account_id`, `symbol`, `quantity`, `price`, `market_value`,
+`asset_type`, `cost_basis` (NULL when the source file doesn't provide it, e.g. Vanguard's CSV).
+
+### `holding_overrides`
+Per-symbol asset-type override — the "rule engine for holdings": set from the Investments
+page, applied at read time over every snapshot's holdings (e.g. force a bond ETF to count
+as `other`, or a fund to count as `cash`). Columns: `symbol` (PK), `asset_type` (equity /
+etf / mutual_fund / cash / other), `created_at`.
+
+### `investment_transactions`
+Investment ledger (PRD-2 Phase 8): every trade/dividend/transfer at any brokerage —
+parsed from a Vanguard statement PDF, pulled from the Schwab API, or entered manually.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | INTEGER PK | |
+| account_id | INTEGER FK | → accounts |
+| date | TEXT | trade date, YYYY-MM-DD |
+| settle_date | TEXT | |
+| symbol | TEXT | NULL for cash movements |
+| type | TEXT | buy / sell / dividend / capgain_st / capgain_lt / interest / deposit / withdrawal / fee / other |
+| quantity | REAL | |
+| price | REAL | |
+| fees | REAL | |
+| amount | REAL | signed: buys negative, deposits positive |
+| source | TEXT | 'vanguard_pdf' / 'schwab_api' / 'manual' |
+| raw | TEXT | original parsed line (audit trail) |
+| created_at | TEXT | ISO8601 |
+
+**UNIQUE constraint:** `(account_id, date, symbol, type, amount)` — re-importing the same statement is safe.
 
 ### `transactions`
 One row per transaction, imported from CSV or synced via Plaid.
@@ -245,6 +317,7 @@ One row per transaction, imported from CSV or synced via Plaid.
 | raw_csv_row | TEXT | JSON of original CSV row (audit trail) — NULL for pure-Plaid rows |
 | import_batch_id | TEXT | UUID per upload session |
 | plaid_transaction_id | TEXT | Plaid's stable id — set on Plaid-origin rows, or adopted onto a matching CSV row by `insert_plaid_rows()` (see `accounts` note above) |
+| my_share | REAL | True spend (PRD-2 Phase 7): this transaction's actual cost after splitting with friends via `/transactions/<id>/split`. NULL = unsplit, full `amount` is yours. `models/aggregates.py` reads `COALESCE(my_share, amount)` everywhere |
 | created_at | TEXT | ISO8601 |
 
 **UNIQUE constraint:** `(account_id, date, description, amount)` — re-uploading the same CSV is safe.
@@ -271,6 +344,56 @@ Per-account balance tied to a snapshot.
 | account_id | INTEGER FK | → accounts |
 | balance | REAL | |
 
+### `schwab_tokens`
+Schwab Trader API OAuth tokens (PRD Phase 4b) — single row, local DB only (gitignored).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | INTEGER PK | CHECK(id = 1) — enforces a single row |
+| access_token | TEXT | |
+| refresh_token | TEXT | |
+| access_expires_at | TEXT | ISO8601; access tokens live ~30 min |
+| refresh_expires_at | TEXT | ISO8601; refresh tokens live 7 days → weekly re-login |
+| updated_at | TEXT | |
+
+### `plaid_items`
+One row per linked institution login (a Plaid "Item"). Local DB only (gitignored) —
+`access_token` is a long-lived bearer secret. `cursor` drives incremental `/transactions/sync` calls.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | INTEGER PK | |
+| item_id | TEXT UNIQUE | Plaid's Item id |
+| access_token | TEXT | |
+| institution | TEXT | |
+| cursor | TEXT | `/transactions/sync` cursor; NULL = full sync |
+| status | TEXT | default 'active' |
+| created_at | TEXT | ISO8601 |
+| updated_at | TEXT | |
+
+### `budgets`
+Per-category monthly budget targets (PRD-2 Phase 10), shown against actual spend on the
+Insights and Dashboard pages. Columns: `category` (PK), `monthly_amount`, `active`.
+
+### `life_items`
+The "Life tab": declared fixed/needed monthly spend (rent, insurance, internet, ...) —
+these often never appear in a CSV (e.g. rent paid by check/Zelle), so `/life/<id>/log` can
+post one as a transaction for a given month. Columns: `name`, `monthly_amount`, `category`
+(optional canonical category), `notes`, `active`.
+
+### `people`
+Friends registry (PRD-2 Phase 7) — settlement is tracked per-person across every outing,
+not just within one. Legacy name-only `outing_participants` rows get linked here by
+`backfill_people()`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | INTEGER PK | |
+| name | TEXT UNIQUE | |
+| venmo_handle | TEXT | |
+| notes | TEXT | |
+| created_at | TEXT | ISO8601 |
+
 ### `outings`
 A shared expense event (dinner, trip, etc.).
 
@@ -288,6 +411,7 @@ People at an outing. You are always the one owed money.
 |---|---|---|
 | outing_id | INTEGER FK | → outings |
 | name | TEXT | friend's name |
+| person_id | INTEGER FK | → people, nullable — legacy rows are name-only until `backfill_people()` links them |
 | is_paid | INTEGER | 0 = owes you, 1 = settled |
 | paid_at | TEXT | ISO8601 when marked paid |
 
@@ -302,6 +426,7 @@ Individual expenses within an outing.
 | paid_by_me | INTEGER | 1 = you fronted this cost |
 | split_count | INTEGER | how many ways to split |
 | per_person_amount | REAL | computed or manually overridden |
+| transaction_id | INTEGER FK | → transactions, nullable — set when this line item was auto-created by `/transactions/<id>/split` |
 
 ---
 
@@ -330,17 +455,20 @@ Category source is set to `'claude'`.
 ### Dashboard
 | Method | Path | Purpose |
 |---|---|---|
-| GET | /dashboard?year=YYYY | Home. Sheet-parity cashflow: income/expense pivots, % of income, FCF, cumulative. Reads via `models/aggregates.py` (sheet history < LIVE_START_MONTH, transactions after) |
+| GET | /dashboard?year=YYYY | Home (`/` redirects here). Sheet-parity cashflow: income/expense pivots, % of income, FCF, cumulative, quarter-over-quarter + YoY, recurring-charge detection, budget strip. Reads via `models/aggregates.py` (sheet history < LIVE_START_MONTH, transactions after) |
 
 ### Transactions
 | Method | Path | Purpose |
 |---|---|---|
-| GET | /transactions | Paginated list with filters (account, category, date range) |
-| POST | /transactions/upload | Upload CSV → **preview** (no insert): sample rows, column-mapping dropdowns, sign-flip. Re-posts to itself to re-preview |
-| POST | /transactions/upload/confirm | Insert previewed file; optionally persist mapping+flip to the account |
+| GET | /transactions | Paginated list with filters (account, category, date range, review status) |
+| GET, POST | /transactions/upload | GET: upload form. POST: parse CSV → **preview** (no insert): sample rows, column-mapping dropdowns, sign-flip. Re-posts to itself to re-preview |
+| POST | /transactions/upload/confirm | Insert previewed file; optionally persist mapping+flip to the account; hands unmatched rows to Claude |
 | GET | /transactions/review | Review Claude-categorized transactions |
+| POST | /transactions/bulk-category | Mass-categorize selected transactions (e.g. from Needs Review) and suggest a shared rule pattern for future imports |
 | POST | /transactions/\<id\>/category | AJAX: update category, set source='user' |
 | POST | /transactions/\<id\>/delete | Delete a transaction |
+| POST | /transactions/\<id\>/split | True spend (PRD-2 Phase 7): split a card charge with friends — creates/links an outing, sets `my_share` |
+| POST | /transactions/\<id\>/unsplit | Remove a split — the full charge counts as your expense again |
 
 ### Rules
 | Method | Path | Purpose |
@@ -372,19 +500,53 @@ Category source is set to `'claude'`.
 |---|---|---|
 | GET | /net-worth?year=YYYY | Stat cards, stacked class chart, account × month grid, holdings table, prefilled snapshot form |
 | POST | /net-worth/snapshot | Record balances — MERGES into existing snapshot of same date (upsert) |
+| GET | /net-worth/equities | Legacy URL, kept working — redirects to `/investments` |
+| POST | /net-worth/equities/vest | Log an RSU vest as an income transaction (category "RSU Vest"); vests never appear in checking/card CSVs |
+| POST | /net-worth/equities/classify | AJAX: set a per-symbol `holding_overrides` asset-type override |
+| POST | /net-worth/schwab/exchange | Finish the Schwab OAuth flow (user pastes the redirect URL) |
+| POST | /net-worth/schwab/sync | Pull balances + positions for all Schwab accounts into today's snapshot |
+| POST | /net-worth/statement/preview | Vanguard statement PDF → preview holdings w/ cost basis + parsed trades/deposits |
+| POST | /net-worth/statement/confirm | Write statement holdings into the dated snapshot + new rows into the investment ledger |
 | POST | /net-worth/holdings/preview | Upload Schwab/Vanguard holdings CSV → preview (account matching via external_ref) |
 | POST | /net-worth/holdings/confirm | Write balances + holdings rows into the dated snapshot |
 | GET | /net-worth/data | JSON time-series for Chart.js |
+
+### Investments
+| Method | Path | Purpose |
+|---|---|---|
+| GET | /investments | The 30,000-ft view (PRD-2 Phase 9): allocation by class/account, positions with gains, YTD vests/income, the rule-based critic |
+| GET | /investments/activity | Investment ledger, filterable by year/account/type, with a ledger-vs-cashflow reconciliation |
+
+### Insights
+| Method | Path | Purpose |
+|---|---|---|
+| GET | /insights | Top merchants, category trends vs your 3/12-mo average + YoY, budgets vs actual, subscription audit, ranked cut candidates (PRD-2 Phase 10) |
+| POST | /insights/budgets | Save per-category monthly budget targets |
+
+### Life
+| Method | Path | Purpose |
+|---|---|---|
+| GET | /life | Fixed/needed monthly cost items + coverage gaps vs income/spend |
+| POST | /life | Add a fixed-cost item |
+| POST | /life/\<id\>/edit | Update an item |
+| POST | /life/\<id\>/delete | Delete an item |
+| POST | /life/\<id\>/log | Log a payment (e.g. rent via check/Zelle) as a transaction for a given month — these never appear in CSVs |
 
 ### Bill Splits
 | Method | Path | Purpose |
 |---|---|---|
 | GET | /splits | All outings + total owed to you |
+| GET | /splits/people | Per-person ledger across every outing, with settle/Venmo handle |
+| POST | /splits/people/\<id\>/settle | Mark all of that person's outstanding items paid |
+| POST | /splits/people/\<id\>/venmo | Save a person's Venmo handle |
 | POST | /splits/new | Create outing |
 | GET | /splits/\<id\> | Outing detail: items, per-person totals |
 | POST | /splits/\<id\>/item | Add line item |
+| POST | /splits/\<id\>/item/\<item_id\>/delete | Delete a line item |
 | POST | /splits/\<id\>/participant | Add participant |
 | POST | /splits/\<id\>/participant/\<pid\>/paid | Mark participant as paid |
+| POST | /splits/\<id\>/participant/\<pid\>/unpaid | Undo — mark participant unpaid |
+| POST | /splits/\<id\>/delete | Delete outing |
 
 ### Exports
 | Method | Path | Purpose |
