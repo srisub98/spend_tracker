@@ -6,7 +6,7 @@ PIP    := $(VENV)/bin/pip
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install run bootstrap bootstrap-reset db-shell reset-db export-dir clean
+.PHONY: help install run bootstrap bootstrap-reset db-shell reset-db plaid-reset export-dir clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -33,6 +33,9 @@ db-shell: ## Open a sqlite3 shell on the database
 
 reset-db: ## Delete the database (recreates + reseeds on next run) — DESTRUCTIVE
 	@read -p "Delete data/finance.db? [y/N] " ans && [ "$$ans" = "y" ] && rm -f data/finance.db && echo "Deleted." || echo "Aborted."
+
+plaid-reset: ## Reset sandbox Plaid data: synced txns, linked accounts, items — DESTRUCTIVE, sandbox-only
+	$(PYTHON) scripts/reset_plaid.py
 
 clean: ## Remove venv and python caches
 	rm -rf $(VENV) **/__pycache__ __pycache__

@@ -59,7 +59,8 @@ Create your accounts, then upload statements at **Transactions → Upload**.
   `.env.example` (only needed for the optional history-bootstrap, Schwab-sync, Plaid
   bank-sync, and investments-page concentration-check features). Plaid Sandbox is free
   with fake data, and real banks are free too under Plaid's no-cost Trial plan (up to 10
-  linked banks); leave `PLAID_*` blank to stay CSV-only.
+  linked banks); leave `PLAID_*` blank to stay CSV-only. Re-testing the sandbox flow?
+  `make plaid-reset` wipes synced transactions, linked accounts, and Items for a clean re-run.
 
 ## Bring your own statements
 

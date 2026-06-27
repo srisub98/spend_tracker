@@ -168,6 +168,28 @@ def remove_plaid_rows(plaid_transaction_ids):
     return removed
 
 
+def delete_plaid_synced():
+    """Admin reset (sandbox): drop ALL Plaid-synced transactions in one pass. Same rule
+    as remove_plaid_rows — pure Plaid-origin rows (no raw_csv_row) are deleted, while a
+    CSV row that merely adopted a plaid_transaction_id is kept (real history) and just
+    unlinked. Returns {"deleted": n, "unadopted": m}."""
+    db = get_db()
+    # Detach split line-items pointing at rows we're about to delete (FK is ON).
+    db.execute(
+        """UPDATE outing_line_items SET transaction_id=NULL WHERE transaction_id IN (
+               SELECT id FROM transactions
+               WHERE plaid_transaction_id IS NOT NULL AND raw_csv_row IS NULL)""")
+    deleted = db.execute(
+        "DELETE FROM transactions WHERE plaid_transaction_id IS NOT NULL AND raw_csv_row IS NULL"
+    ).rowcount
+    unadopted = db.execute(
+        "UPDATE transactions SET plaid_transaction_id=NULL "
+        "WHERE plaid_transaction_id IS NOT NULL AND raw_csv_row IS NOT NULL"
+    ).rowcount
+    db.commit()
+    return {"deleted": deleted, "unadopted": unadopted}
+
+
 def get_uncategorized_plaid_ids(plaid_transaction_ids):
     """Freshly synced rows (by plaid_transaction_id) that no rule matched — the
     Plaid analogue of get_uncategorized_by_batch, for handing off to Claude."""
