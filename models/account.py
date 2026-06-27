@@ -78,3 +78,28 @@ def delete(account_id):
         raise ValueError("Cannot delete account with existing transactions.")
     db.execute("DELETE FROM accounts WHERE id=?", (account_id,))
     db.commit()
+
+
+def purge_plaid_links():
+    """Admin reset (sandbox): undo Plaid account linkage. An account created by a Plaid
+    link (transaction-less once delete_plaid_synced has run) is deleted; a pre-existing
+    account that was only matched by last-4 keeps its data and is just unlinked. Returns
+    {"deleted": [names], "unlinked": [names]}."""
+    db = get_db()
+    deleted, unlinked = [], []
+    for a in db.execute(
+            "SELECT id, name FROM accounts WHERE plaid_account_id IS NOT NULL").fetchall():
+        has_tx = db.execute(
+            "SELECT 1 FROM transactions WHERE account_id=? LIMIT 1", (a["id"],)).fetchone()
+        if has_tx:
+            db.execute(
+                "UPDATE accounts SET plaid_account_id=NULL, plaid_item_id=NULL WHERE id=?",
+                (a["id"],))
+            unlinked.append(a["name"])
+        else:
+            db.execute("DELETE FROM snapshot_account_balances WHERE account_id=?", (a["id"],))
+            db.execute("DELETE FROM holdings WHERE account_id=?", (a["id"],))
+            db.execute("DELETE FROM accounts WHERE id=?", (a["id"],))
+            deleted.append(a["name"])
+    db.commit()
+    return {"deleted": deleted, "unlinked": unlinked}

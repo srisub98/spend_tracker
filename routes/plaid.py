@@ -66,6 +66,29 @@ def sandbox_link():
     return redirect(url_for("accounts.index"))
 
 
+@bp.route("/sandbox-reset", methods=["POST"])
+def sandbox_reset():
+    """Sandbox-only: wipe all Plaid sync state (synced txns, Plaid-created accounts,
+    Items) so the link/sync flow can be re-tested from scratch. The in-UI twin of
+    `make plaid-reset`; 404s outside sandbox so it can never touch production data."""
+    if not plaid_api.is_sandbox():
+        abort(404)
+    try:
+        s = plaid_api.reset_sandbox()
+    except Exception as e:
+        flash(f"Plaid reset failed: {e.__class__.__name__}: {e}", "error")
+        return redirect(url_for("accounts.index"))
+    flash("Plaid sandbox reset: "
+          f"{s['transactions_deleted']} transactions deleted"
+          + (f", {s['transactions_unadopted']} CSV rows un-linked"
+             if s['transactions_unadopted'] else "")
+          + f", {len(s['accounts_deleted'])} accounts removed"
+          + (f", {len(s['accounts_unlinked'])} kept+unlinked"
+             if s['accounts_unlinked'] else "")
+          + f", {s['items_removed']} bank(s) disconnected.")
+    return redirect(url_for("accounts.index"))
+
+
 @bp.route("/sync", methods=["POST"])
 def sync():
     items = item_model.get_all()

@@ -1,6 +1,8 @@
 """Plaid mapping + dedup. The pure mappers need no DB; the dedup tests run against
 the temp DB. No network: services/plaid_api imports the SDK lazily, and these tests
 only call the pure functions + the model layer, never the API."""
+import pytest
+
 import models.transaction as tx_model
 from database.db import get_db
 from services import plaid_api
@@ -98,3 +100,55 @@ def test_remove_deletes_plaid_origin_but_keeps_csv(flask_app):
         assert len(rows) == 1
         assert rows[0]["description"] == "CSV ROW"
         assert rows[0]["plaid_transaction_id"] is None            # unlinked, not deleted
+
+
+# ----------------------------------------------------------- sandbox reset
+
+def test_reset_sandbox_clears_synced_data_but_keeps_csv(flask_app):
+    import models.account as account_model
+    import models.plaid_item as item_model
+    with flask_app.app_context():
+        # An account created by a Plaid link (its own fresh row).
+        created_id = account_model.create(
+            name="First Platypus Checking", type_="checking", institution="First Platypus",
+            external_ref="3710", plaid_account_id="plaid-acct-new", plaid_item_id="item-1")
+        item_model.upsert("item-1", "access-tok", "First Platypus Bank")
+
+        # Pure Plaid txns on the created account.
+        tx_model.insert_plaid_rows([
+            _row("p1", -10.0, "2026-06-10", account_id=created_id),
+            _row("p2", -20.0, "2026-06-11", account_id=created_id)])
+
+        # A pre-existing CSV account (seed #1) that gets matched + adopts a Plaid id.
+        tx_model.bulk_insert([{
+            "account_id": 1, "date": "2026-06-12", "description": "REAL CSV CHARGE",
+            "amount": -5.0, "raw_csv_row": "{}", "import_batch_id": "c"}])
+        tx_model.insert_plaid_rows([_row("p3", -5.0, "2026-06-12", desc="Clean", account_id=1)])
+        account_model.link_plaid(1, "plaid-acct-existing", "item-1")
+
+        summary = plaid_api.reset_sandbox()
+
+        # Two pure-Plaid rows deleted; the adopted CSV row kept but un-stamped.
+        assert summary["transactions_deleted"] == 2
+        assert summary["transactions_unadopted"] == 1
+        # The Plaid-created account is gone; the matched real account stays, unlinked.
+        assert "First Platypus Checking" in summary["accounts_deleted"]
+        assert account_model.get_by_id(created_id) is None
+        kept_acct = account_model.get_by_id(1)
+        assert kept_acct is not None and kept_acct["plaid_account_id"] is None
+        # The CSV charge survives with its raw description, Plaid id cleared.
+        rows = get_db().execute(
+            "SELECT description, plaid_transaction_id FROM transactions").fetchall()
+        assert [r["description"] for r in rows] == ["REAL CSV CHARGE"]
+        assert rows[0]["plaid_transaction_id"] is None
+        # Every linked Item dropped.
+        assert summary["items_removed"] == 1
+        assert item_model.get_all() == []
+
+
+def test_reset_sandbox_refuses_outside_sandbox(flask_app, monkeypatch):
+    import config
+    with flask_app.app_context():
+        monkeypatch.setattr(config, "PLAID_ENV", "production")
+        with pytest.raises(RuntimeError, match="sandbox"):
+            plaid_api.reset_sandbox()

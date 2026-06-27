@@ -15,10 +15,36 @@ via the /transactions/sync cursor. No webhooks (local app) — sync is a manual 
 import config
 import models.account as account_model
 import models.plaid_item as item_model
+import models.transaction as tx_model
 
 
 def configured():
     return bool(config.PLAID_CLIENT_ID and config.PLAID_SECRET)
+
+
+def is_sandbox():
+    return (config.PLAID_ENV or "sandbox").lower() == "sandbox"
+
+
+def reset_sandbox():
+    """Admin: wipe all Plaid sync state so the sandbox can be re-tested from a clean
+    slate. Refuses unless PLAID_ENV is 'sandbox' — it must never touch production-synced
+    data. Deletes Plaid-origin transactions (un-adopting any CSV rows that borrowed an
+    id), removes Plaid-created accounts (keeps + unlinks pre-existing matched ones), and
+    drops every linked Item. Returns a summary dict."""
+    if not is_sandbox():
+        raise RuntimeError(
+            f"reset_sandbox refused: PLAID_ENV={config.PLAID_ENV!r} is not 'sandbox'.")
+    tx = tx_model.delete_plaid_synced()
+    accts = account_model.purge_plaid_links()
+    items = item_model.delete_all()
+    return {
+        "transactions_deleted": tx["deleted"],
+        "transactions_unadopted": tx["unadopted"],
+        "accounts_deleted": accts["deleted"],
+        "accounts_unlinked": accts["unlinked"],
+        "items_removed": items,
+    }
 
 
 def _client():

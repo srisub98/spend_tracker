@@ -54,3 +54,12 @@ def delete(item_id):
         (datetime.now().isoformat(), item_id),
     )
     db.commit()
+
+
+def delete_all():
+    """Admin reset (sandbox): hard-delete every linked Item (vs the soft status flip of
+    delete()), so re-linking starts clean. Returns the number of rows removed."""
+    db = get_db()
+    n = db.execute("DELETE FROM plaid_items").rowcount
+    db.commit()
+    return n

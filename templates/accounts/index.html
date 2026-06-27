@@ -18,6 +18,10 @@
       <form method="post" action="{{ url_for('plaid.sandbox_link') }}" style="display:inline">
         <button class="btn" title="Link a fake sandbox bank for testing">Add sandbox bank</button>
       </form>
+      <form method="post" action="{{ url_for('plaid.sandbox_reset') }}" style="display:inline"
+            onsubmit="return confirm('Delete ALL Plaid sandbox data — synced transactions, linked accounts, and connected banks? This cannot be undone.')">
+        <button class="btn" title="Wipe all sandbox Plaid data so you can re-test from scratch">Reset sandbox data</button>
+      </form>
     {% endif %}
     {% if plaid_items %}
       <form method="post" action="{{ url_for('plaid.sync') }}" style="display:inline">
